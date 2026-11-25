@@ -1,0 +1,114 @@
+// Prisma schema for ReviewReward Micro-Task & Rewards Platform
+// Configured for Supabase PostgreSQL
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              String           @id @default(cuid())
+  userCode        String           @unique
+  name            String?
+  email           String           @unique
+  avatarUrl       String?
+  role            String           @default("USER") // "USER" | "ADMIN"
+  walletBalance   Float            @default(0.0)
+  isWithdrawing   Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  submissions       Submission[]
+  sentTransfers     WalletTransfer[] @relation("SentTransfers")
+  receivedTransfers WalletTransfer[] @relation("ReceivedTransfers")
+  withdrawals       Withdrawal[]
+
+  @@index([role])
+}
+
+model Task {
+  id              String       @id @default(cuid())
+  title           String
+  shopUrl         String
+  instructions    String
+  rewardInr       Float        @default(10.0)
+  maxLimit        Int
+  completedCount  Int          @default(0)
+  status          String       @default("ACTIVE") // "ACTIVE" | "CLOSED"
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  submissions     Submission[]
+
+  @@index([status])
+}
+
+model Submission {
+  id              String    @id @default(cuid())
+  userId          String
+  taskId          String
+  proofLink       String    @unique
+  status          String    @default("APPROVED") // "PENDING" | "APPROVED" | "REJECTED"
+  rewardCredited  Float     @default(10.0)
+  adminNotes      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task            Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, taskId])
+  @@index([userId])
+  @@index([taskId])
+  @@index([status])
+}
+
+model WalletTransfer {
+  id          String   @id @default(cuid())
+  senderId    String
+  receiverId  String
+  amountInr   Float
+  note        String?
+  createdAt   DateTime @default(now())
+
+  sender      User     @relation("SentTransfers", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User     @relation("ReceivedTransfers", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+model Withdrawal {
+  id                  String   @id @default(cuid())
+  userId              String
+  amountInr           Float
+  bufferedInr         Float
+  usdtAmount          Float
+  network             String   @default("POLYGON")
+  walletAddress       String
+  nowpaymentsPayoutId String?
+  batchWithdrawalId   String?
+  txHash              String?
+  status              String   @default("PROCESSING") // "PROCESSING" | "FINISHED" | "FAILED"
+  errorMessage        String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Setting {
+  id                    String   @id @default("default")
+  verificationMode      String   @default("AUTO") // "AUTO" | "MANUAL"
+  cashoutBufferPercent  Float    @default(6.0)
+  minWithdrawalInr      Float    @default(100.0)
+  usdtInrRate           Float    @default(90.5)
+  updatedAt             DateTime @updatedAt
+}
