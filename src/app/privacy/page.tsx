@@ -70,9 +70,9 @@ export default function PrivacyPolicyPage() {
               Under the principle of <em>Data Minimization</em>, we collect strictly the personal data necessary to provide and secure micro-task attribution, wallet ledger accounting, and payout execution:
             </p>
             <ul className="list-disc pl-5 space-y-1.5 text-slate-600 font-mono text-xs">
-              <li><strong className="text-slate-900">Account Identification:</strong> Full Name, Email Address, and Avatar URL provided during Google OAuth authentication.</li>
+              <li><strong className="text-slate-900">Account Identification:</strong> Full Name, Email Address, and Avatar URL provided during Single Sign-On authentication.</li>
               <li><strong className="text-slate-900">Internal Identifier:</strong> Unique alphanumeric user code (e.g. <code>USR-XXXXX</code>) used to protect your private email address during P2P transfers.</li>
-              <li><strong className="text-slate-900">Task Verification Data:</strong> Public Google Maps review proof URL submitted by you, review timestamp, and assigned task reference.</li>
+              <li><strong className="text-slate-900">Task Verification Data:</strong> Public store review proof URL submitted by you, review timestamp, and assigned task reference.</li>
               <li><strong className="text-slate-900">Financial Disbursement Data:</strong> Public Polygon (EVM) wallet address provided by you for USDT withdrawal dispatches.</li>
               <li><strong className="text-slate-900">Security & Audit Logs:</strong> Cryptographic payout hashes, IP address, user-agent, and transaction timestamps strictly for fraud detection and anti-sybil enforcement.</li>
             </ul>
@@ -88,7 +88,7 @@ export default function PrivacyPolicyPage() {
               In accordance with Section 6 of the DPDP Act, your personal data is processed solely on the basis of your <strong>free, specific, informed, unconditional, and unambiguous affirmative consent</strong>, as well as for certain legitimate uses:
             </p>
             <ul className="list-disc pl-5 space-y-1.5 text-slate-600 text-xs font-mono">
-              <li>Authenticating your account securely via Google OAuth without storing plaintext passwords.</li>
+              <li>Authenticating your account securely via OAuth 2.0 without storing plaintext passwords.</li>
               <li>Verifying review task submissions against shop task limits and organic rating balance distributions.</li>
               <li>Crediting ₹10 INR task rewards and maintaining an unalterable wallet ledger.</li>
               <li>Facilitating zero-fee peer-to-peer transfers between accounts.</li>

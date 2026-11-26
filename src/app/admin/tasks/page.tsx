@@ -227,7 +227,7 @@ export default function AdminTasksPage() {
               <input
                 type="text"
                 required
-                placeholder="e.g. Starbucks Koramangala - Google Maps Review"
+                placeholder="e.g. Starbucks Koramangala - Store Review"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="futuristic-input w-full rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder:text-slate-400"
@@ -241,7 +241,7 @@ export default function AdminTasksPage() {
               <input
                 type="url"
                 required
-                placeholder="https://maps.google.com/?cid=..."
+                placeholder="https://maps.app.goo.gl/... or shop URL"
                 value={shopUrl}
                 onChange={(e) => setShopUrl(e.target.value)}
                 className="futuristic-input w-full rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder:text-slate-400"

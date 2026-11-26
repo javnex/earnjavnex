@@ -59,8 +59,8 @@ export default function TermsPage() {
             </h2>
             <ul className="list-disc pl-5 space-y-1.5 text-slate-600 text-xs font-mono">
               <li>You must be at least 18 years of age and legally competent to enter into binding agreements under Indian law.</li>
-              <li>Authentication is performed exclusively via verified Google OAuth accounts.</li>
-              <li>You are strictly responsible for maintaining the confidentiality of your Google account credentials.</li>
+              <li>Authentication is performed exclusively via verified user authentication accounts.</li>
+              <li>You are strictly responsible for maintaining the confidentiality of your account credentials.</li>
               <li>We reserve the right to suspend or terminate accounts suspected of automated bot participation or identity falsification.</li>
             </ul>
           </section>
@@ -74,8 +74,8 @@ export default function TermsPage() {
               ReviewReward connects users to active shop tasks with strict programmatic constraints:
             </p>
             <ul className="list-disc pl-5 space-y-2 text-slate-600 text-xs">
-              <li><strong className="text-slate-900 font-mono">Strict 1 Review per Shop per Account:</strong> Each Google account may submit at most one verified review per shop task listing. Multiple submissions to the same shop task from the same Google account are blocked.</li>
-              <li><strong className="text-slate-900 font-mono">Proof Verification:</strong> Users must submit a valid public Google Maps review URL containing the assigned review content and star rating. Submitting broken, private, or irrelevant URLs will lead to rejection.</li>
+              <li><strong className="text-slate-900 font-mono">Strict 1 Review per Shop per Account:</strong> Each user account may submit at most one verified review per shop task listing. Multiple submissions to the same shop task from the same account are blocked.</li>
+              <li><strong className="text-slate-900 font-mono">Proof Verification:</strong> Users must submit a valid public review proof URL containing the assigned review content and star rating. Submitting broken, private, or irrelevant URLs will lead to rejection.</li>
               <li><strong className="text-slate-900 font-mono">Quota Auto-Close:</strong> Each task listing has a maximum review limit set by the administrator. Once the quota is reached, the task automatically closes.</li>
               <li><strong className="text-slate-900 font-mono">Task Reward:</strong> Each verified review credits ₹10.00 INR directly into the user&apos;s internal web wallet.</li>
             </ul>
@@ -87,7 +87,7 @@ export default function TermsPage() {
               <span>Internal Wallet & Zero-Fee P2P Pooling</span>
             </h2>
             <p>
-              Platform users who maintain multiple legitimate Google accounts may pool their task rewards into a single designated primary account:
+              Platform users who maintain multiple legitimate user accounts may pool their task rewards into a single designated primary account:
             </p>
             <ul className="list-disc pl-5 space-y-1.5 text-slate-600 text-xs font-mono">
               <li>Internal wallet transfers are completely free of charge (₹0 fee).</li>

@@ -112,7 +112,7 @@ export default function DashboardPage() {
                 All Available Tasks Completed
               </h3>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Log into secondary Google accounts to complete tasks and pool your ₹10 rewards here using ₹0 internal transfer.
+                Log into secondary accounts to complete tasks and pool your ₹10 rewards here using ₹0 internal transfer.
               </p>
             </div>
           ) : (
@@ -195,7 +195,7 @@ export default function DashboardPage() {
               <span>Multi-Account Pooling</span>
             </div>
             <p className="text-xs text-slate-700 leading-relaxed font-sans">
-              Google Maps allows 1 review per Google account. If you manage multiple accounts:
+              Each store listing allows 1 review per account. If you manage multiple accounts:
             </p>
             <ol className="list-decimal list-inside text-xs text-slate-600 space-y-1.5 font-sans">
               <li>Sign in with Account 2, 3, etc.</li>

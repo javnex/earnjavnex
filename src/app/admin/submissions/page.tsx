@@ -241,7 +241,7 @@ export default function AdminSubmissionsPage() {
                       {sub.adminNotes && (
                         <div className="mt-2 rounded-xl bg-blue-50/60 border border-blue-200 p-2.5 text-[11px] space-y-1">
                           <span className="font-bold text-blue-800 block text-[10px] font-mono uppercase tracking-wider">
-                            Expected Google Review:
+                            Expected Review:
                           </span>
                           <p className="text-slate-700 leading-relaxed font-sans">
                             {sub.adminNotes}

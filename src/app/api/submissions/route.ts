@@ -162,7 +162,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Verification failed: You have already completed this task! Strict policy: 1 submission per Google account per shop.",
+            "Verification failed: You have already completed this task! Strict policy: 1 submission per account per shop.",
         },
         { status: 400 }
       );
@@ -186,7 +186,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3.1 Natural Velocity Rate-Limiter (Prevents Google burst detection on 50-200 review listings)
+    // 3.1 Natural Velocity Rate-Limiter (Prevents burst detection on 50-200 review listings)
     const dailyLimit = extractTaskDailyLimit(targetTask);
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -201,7 +201,7 @@ export async function POST(req: Request) {
     if ((todayApprovedCount || 0) >= dailyLimit) {
       return NextResponse.json(
         {
-          error: `Daily velocity limit reached (${todayApprovedCount}/${dailyLimit} today)! To protect this Google Business Profile from burst detection, this listing accepts a maximum of ${dailyLimit} reviews per day. Daily slots will reopen tomorrow morning.`,
+          error: `Daily velocity limit reached (${todayApprovedCount}/${dailyLimit} today)! To protect this store listing from burst detection, this listing accepts a maximum of ${dailyLimit} reviews per day. Daily slots will reopen tomorrow morning.`,
         },
         { status: 400 }
       );
@@ -225,7 +225,7 @@ export async function POST(req: Request) {
       const remainingMinutes = Math.max(1, 10 - elapsedMinutes);
       return NextResponse.json(
         {
-          error: `Pacing cooldown active: Please wait ${remainingMinutes} more minute${remainingMinutes > 1 ? "s" : ""} before submitting another review. Spacing out reviews protects your personal Google account and ensures permanent reviews.`,
+          error: `Pacing cooldown active: Please wait ${remainingMinutes} more minute${remainingMinutes > 1 ? "s" : ""} before submitting another review. Spacing out reviews ensures high-quality permanent reviews.`,
         },
         { status: 400 }
       );
@@ -256,7 +256,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             error:
-              "Verification failed: This specific Google review has already been claimed! You cannot reuse the same review.",
+              "Verification failed: This specific review proof has already been claimed! You cannot reuse the same review.",
           },
           { status: 400 }
         );
@@ -273,7 +273,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Verification failed: Could not load review details from Google Maps. If you just posted it, Google Maps may take 1-2 minutes to publish it publicly. Please ensure your review is visible and try again.",
+            "Verification failed: Could not load review details from the store listing. If you just posted it, the listing may take 1-2 minutes to publish it publicly. Please ensure your review is visible and try again.",
         },
         { status: 400 }
       );
@@ -285,7 +285,7 @@ export async function POST(req: Request) {
       if (!nameMatches) {
         return NextResponse.json(
           {
-            error: `Verification failed: Reviewer name mismatch! The review on Google Maps was posted by "${liveScrape.reviewerName}", but your logged-in Google Account is "${expectedReviewer}". You must post the review using your own logged-in Google account.`,
+            error: `Verification failed: Reviewer name mismatch! The review on the store listing was posted by "${liveScrape.reviewerName}", but your logged-in account name is "${expectedReviewer}". You must post the review using your own logged-in account.`,
           },
           { status: 400 }
         );
@@ -294,7 +294,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Verification failed: Could not detect the reviewer name on Google Maps. If you just posted your review, Google Maps may take 1-2 minutes to display it publicly. Please wait a moment and try again.",
+            "Verification failed: Could not detect the reviewer name on the store listing. If you just posted your review, the listing may take 1-2 minutes to display it publicly. Please wait a moment and try again.",
         },
         { status: 400 }
       );
@@ -310,7 +310,7 @@ export async function POST(req: Request) {
       if (!shopMatches) {
         return NextResponse.json(
           {
-            error: `Verification failed: Shop mismatch! This review on Google Maps is for "${liveScrape.shopName}", but this task requires a review for "${targetTask.title}". You must submit a review for the specified shop only.`,
+            error: `Verification failed: Shop mismatch! This review on the store listing is for "${liveScrape.shopName}", but this task requires a review for "${targetTask.title}". You must submit a review for the specified shop only.`,
           },
           { status: 400 }
         );
@@ -332,7 +332,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Verification failed: Could not detect your review text on Google Maps. If you just posted it, Google Maps may take 1-2 minutes to display the text publicly. Please wait a moment and try again.",
+            "Verification failed: Could not detect your review text on the store listing. If you just posted it, the listing may take 1-2 minutes to display the text publicly. Please wait a moment and try again.",
         },
         { status: 400 }
       );
@@ -342,7 +342,7 @@ export async function POST(req: Request) {
     if (!textMatchResult.matches) {
       return NextResponse.json(
         {
-          error: `Verification failed: Review text mismatch! The review text on Google Maps does not match your assigned AI review text. Users cannot write arbitrary reviews; you must copy and post the exact assigned review text.`,
+          error: `Verification failed: Review text mismatch! The review text on the store listing does not match your assigned AI review text. Users cannot write arbitrary reviews; you must copy and post the exact assigned review text.`,
         },
         { status: 400 }
       );
@@ -353,7 +353,7 @@ export async function POST(req: Request) {
       if (liveScrape.starRating !== assignedStars) {
         return NextResponse.json(
           {
-            error: `Verification failed: Star rating mismatch! You gave ${liveScrape.starRating} stars on Google Maps, but your assigned rating for this task is ${assignedStars} stars. Please edit your review on Google Maps to give ${assignedStars} stars and submit again.`,
+            error: `Verification failed: Star rating mismatch! You gave ${liveScrape.starRating} stars on the store listing, but your assigned rating for this task is ${assignedStars} stars. Please edit your review to give ${assignedStars} stars and submit again.`,
           },
           { status: 400 }
         );

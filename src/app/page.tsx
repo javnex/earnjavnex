@@ -25,7 +25,7 @@ export default function HomePage() {
     operatingSystem: "All",
     browserRequirements: "Requires JavaScript. Requires HTML5.",
     description:
-      "Micro-task platform for Indian users to review verified shops, earn ₹10 per review, pool balances across Google accounts with zero fees, and cash out ₹100 directly to Indian bank accounts.",
+      "Micro-task platform for Indian users to review verified shops, earn ₹10 per review, pool balances across secondary accounts with zero fees, and cash out ₹100 directly to Indian bank accounts.",
     offers: {
       "@type": "Offer",
       price: "0",
@@ -136,7 +136,7 @@ export default function HomePage() {
                 href="/auth/login"
                 className="btn-futuristic w-full sm:w-auto flex items-center justify-center gap-2.5 rounded-2xl px-8 py-3.5 text-xs font-black text-white shadow-xl shadow-blue-500/25 transition-all cursor-pointer"
               >
-                <span>Get Started with Google</span>
+                <span>Get Started Now</span>
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
@@ -209,7 +209,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-lg font-bold text-slate-900">2. Pool Across Accounts (₹0 Fee)</h3>
                 <p className="text-xs text-slate-600 leading-relaxed font-sans">
-                  Strict policy permits 1 review per shop per Google account. If you own multiple legitimate Google IDs, complete the review on each and transfer your ₹10 earnings to your primary account with zero fees.
+                  Strict policy permits 1 review per shop per account. If you own multiple accounts, complete the review on each and transfer your ₹10 earnings to your primary account with zero fees.
                 </p>
               </div>
 
@@ -255,10 +255,10 @@ export default function HomePage() {
 
               <div className="glare-card rounded-2xl p-6 space-y-2 bg-white border border-slate-200">
                 <h3 className="text-sm font-bold text-blue-900">
-                  Can I use multiple Google accounts to pool earnings?
+                  Can I use multiple accounts to pool earnings?
                 </h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Yes! Each Google account can review each shop once. You can use multiple Google accounts and use our ₹0-fee internal wallet transfer to pool all earnings into your main account to reach the ₹100 withdrawal limit quickly.
+                  Yes! Each account can review each shop once. You can use multiple accounts and use our ₹0-fee internal wallet transfer to pool all earnings into your main account to reach the ₹100 withdrawal limit quickly.
                 </p>
               </div>
 

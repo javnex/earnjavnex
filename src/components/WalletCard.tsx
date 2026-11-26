@@ -151,7 +151,7 @@ export default function WalletCard() {
       <div className="mt-6 pt-4 border-t border-blue-700/40 flex items-start sm:items-center gap-2 text-xs text-blue-200">
         <Info className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5 sm:mt-0" />
         <span>
-          <strong className="text-white">Pro Tip:</strong> Own multiple Google accounts? Complete the review on each and transfer your ₹10 earnings to this ID for ₹0 fee.
+          <strong className="text-white">Pro Tip:</strong> Own multiple accounts? Complete the review on each and transfer your ₹10 earnings to this ID for ₹0 fee.
         </span>
       </div>
     </div>

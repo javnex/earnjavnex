@@ -55,7 +55,7 @@ export default function LoginPage() {
           <div className="space-y-1">
             <h2 className="text-base font-bold text-slate-900 font-mono uppercase tracking-wider">Access Terminal</h2>
             <p className="text-xs text-slate-500">
-              Sign in with your Google account to access your tasks and web wallet.
+              Sign in to access your available tasks and web wallet.
             </p>
           </div>
 
@@ -119,7 +119,7 @@ export default function LoginPage() {
           <div className="pt-4 border-t border-slate-100 space-y-2.5 text-xs text-slate-700">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-              <span>Strict 1 review per shop per Google account</span>
+              <span>Strict 1 review per shop per account</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />

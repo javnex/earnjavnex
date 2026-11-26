@@ -118,7 +118,7 @@ async function fetchGeminiGeneratedReview(
     categoryRule = "BUSINESS TYPE: General retail / service business. Focus on staff behavior, service quality, or overall experience.";
   }
 
-  const prompt = `Write an authentic Google Maps review for '${shopTitle}'.
+  const prompt = `Write an authentic store review for '${shopTitle}'.
 Rating: ${starRating} out of 5 stars.
 ${categoryRule}
 ${lengthRule}

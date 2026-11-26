@@ -289,7 +289,7 @@ export default function WithdrawPage() {
               href="/dashboard/transfer"
               className="btn-futuristic-glass inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-semibold text-slate-700 hover:text-blue-600 cursor-pointer"
             >
-              <span>Pool Balances from Secondary Google IDs (₹0 Fee)</span>
+              <span>Pool Balances from Secondary Accounts (₹0 Fee)</span>
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>

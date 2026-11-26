@@ -260,7 +260,7 @@ export function isReviewTextMatch(
     return { matches: false, reason: "No assigned review text provided.", score: 0 };
   }
   if (!actualText || !actualText.trim()) {
-    return { matches: false, reason: "No review text found on Google Maps.", score: 0 };
+    return { matches: false, reason: "No review text found on the store listing.", score: 0 };
   }
 
   const normExp = expectedText
@@ -301,7 +301,7 @@ export function isReviewTextMatch(
   return {
     matches: false,
     score: Number(overlapRatio.toFixed(2)),
-    reason: `Review text mismatch (similarity score: ${Math.round(overlapRatio * 100)}%). Expected assigned text was not found on Google Maps.`,
+    reason: `Review text mismatch (similarity score: ${Math.round(overlapRatio * 100)}%). Expected assigned text was not found on the store listing.`,
   };
 }
 

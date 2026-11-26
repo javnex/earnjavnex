@@ -64,7 +64,7 @@ export default function TasksPage() {
   const reviewerName =
     (session?.user as any)?.name ||
     (session?.user as any)?.email?.split("@")[0] ||
-    "Your Google Account";
+    "Your Account Name";
   const userSeed = (session?.user as any)?.id || "user";
 
   const handleCopyReview = (taskId: string, text: string) => {
@@ -103,7 +103,7 @@ export default function TasksPage() {
   ) => {
     const proofLink = proofInputs[taskId]?.trim();
     if (!proofLink) {
-      setMessage({ type: "error", text: "Please paste your public Google review link." });
+      setMessage({ type: "error", text: "Please paste your public review proof link." });
       return;
     }
 
@@ -178,7 +178,7 @@ export default function TasksPage() {
             <span>Available Review Tasks</span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Complete assigned Google Maps reviews, paste your proof link, and earn ₹10 instantly in your web wallet.
+            Complete assigned store reviews, paste your proof link, and earn ₹10 instantly in your web wallet.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -212,14 +212,14 @@ export default function TasksPage() {
         </div>
       )}
 
-      {/* Google Anti-Spam & Stealth Pacing Advisory Banner */}
+      {/* Anti-Spam & Stealth Pacing Advisory Banner */}
       <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50/90 via-indigo-50/50 to-blue-50/90 p-4 sm:p-5 text-xs text-slate-700 space-y-3 shadow-xs">
         <div className="flex items-center gap-2 font-black text-blue-950 uppercase tracking-wide">
           <ShieldAlert className="h-4 w-4 text-blue-600 shrink-0" />
-          <span>Google Maps Anti-Spam & Natural Pacing Active</span>
+          <span>Anti-Spam & Natural Stealth Pacing Active</span>
         </div>
         <p className="text-[11px] text-slate-600 leading-relaxed font-sans">
-          To protect client listings (50–200 existing reviews) from Google spam filters, this terminal enforces natural organic growth standards:
+          To protect client listings (50–200 existing reviews) from automated spam filters, this terminal enforces natural organic growth standards:
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px] text-slate-700">
           <div className="flex items-start gap-2 bg-white/80 p-2.5 rounded-xl border border-blue-100 shadow-2xs">
@@ -228,7 +228,7 @@ export default function TasksPage() {
           </div>
           <div className="flex items-start gap-2 bg-white/80 p-2.5 rounded-xl border border-blue-100 shadow-2xs">
             <span className="text-emerald-600 font-bold shrink-0">✓</span>
-            <span><strong>Organic Search Discovery:</strong> Use &ldquo;Search on Maps&rdquo; so Google detects natural search navigation.</span>
+            <span><strong>Organic Search Discovery:</strong> Use &ldquo;Search on Maps&rdquo; to simulate natural search navigation.</span>
           </div>
           <div className="flex items-start gap-2 bg-white/80 p-2.5 rounded-xl border border-blue-100 shadow-2xs">
             <span className="text-emerald-600 font-bold shrink-0">✓</span>
@@ -319,11 +319,11 @@ export default function TasksPage() {
                 <div className="flex items-center gap-2.5 rounded-xl bg-blue-50/60 border border-blue-100 p-3 text-xs">
                   <UserCheck className="h-4 w-4 text-blue-600 shrink-0" />
                   <span className="text-slate-700">
-                    Post Under Your Google Account:{" "}
+                    Post Under Your Registered Account:{" "}
                     <strong className="text-slate-900 font-bold">{reviewerName}</strong>
                   </span>
                   <span className="ml-auto hidden sm:inline-block text-[10px] text-blue-700 font-bold bg-white px-2.5 py-0.5 rounded-full border border-blue-200 shadow-xs">
-                    Name Verified on Google Maps
+                    Profile Name Verified
                   </span>
                 </div>
 
@@ -350,7 +350,7 @@ export default function TasksPage() {
                     </span>
                   </div>
                   <span className="text-[11px] text-amber-800 font-medium">
-                    Must give exactly {assignedStars} stars on Google Maps
+                    Must give exactly {assignedStars} stars on the store listing
                   </span>
                 </div>
 
@@ -366,7 +366,7 @@ export default function TasksPage() {
                           Complete Task in 3 Simple Clicks
                         </h4>
                         <p className="text-[11px] text-slate-500">
-                          1. Copy Review ➔ 2. Open Google Maps ➔ 3. Paste link to verify
+                          1. Copy Review ➔ 2. Open Store Listing ➔ 3. Paste link to verify
                         </p>
                       </div>
                     </div>
@@ -433,7 +433,7 @@ export default function TasksPage() {
                           2
                         </span>
                         <span className="text-xs font-bold text-slate-900">
-                          Click 2: Open Shop on Google Maps
+                          Click 2: Open Shop on Maps
                         </span>
                       </div>
 
@@ -450,7 +450,7 @@ export default function TasksPage() {
                             }
                           }}
                           className="btn-futuristic inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold text-white shadow-xs transition-all cursor-pointer"
-                          title="Search on Google Maps: Google sees a 100% natural organic search navigation!"
+                          title="Search on Maps for natural organic discovery"
                         >
                           <span>🔍 Search on Maps (Organic)</span>
                           <ExternalLink className="h-3 w-3" />
@@ -639,9 +639,9 @@ export default function TasksPage() {
               )}
 
               <div className="text-[11px] text-slate-600 space-y-1 pt-2 border-t border-slate-200">
-                <p>1. Open Google Maps, tap on your review and click <strong>Edit</strong>.</p>
+                <p>1. Open the store listing on your maps app, tap on your review and click <strong>Edit</strong>.</p>
                 <p>2. Give exactly <strong>{errorModal.assignedStars || 5} Stars</strong> and paste the assigned review text.</p>
-                <p>3. Wait 30 seconds for Google Maps public view to refresh, then click <strong>Submit & Earn ₹10</strong> again.</p>
+                <p>3. Wait 30 seconds for the public listing to refresh, then click <strong>Submit & Earn ₹10</strong> again.</p>
               </div>
             </div>
 
@@ -654,7 +654,7 @@ export default function TasksPage() {
                   rel="noreferrer"
                   className="w-full sm:w-1/2 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors"
                 >
-                  <span>Open Google Maps</span>
+                  <span>Open Store Listing</span>
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               )}

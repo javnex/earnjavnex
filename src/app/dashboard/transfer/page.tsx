@@ -230,7 +230,7 @@ export default function TransferPage() {
           <span>Internal Wallet Transfer (₹0 Fee)</span>
         </h1>
         <p className="text-xs text-slate-500 mt-1">
-          Instantly transfer funds to another user or pool rewards from your secondary Google accounts into one primary ID to reach the ₹100 withdrawal threshold.
+          Instantly transfer funds to another user or pool rewards from your secondary accounts into one primary ID to reach the ₹100 withdrawal threshold.
         </p>
       </div>
 
@@ -278,7 +278,7 @@ export default function TransferPage() {
           <strong className="text-blue-950 block font-semibold mb-0.5">
             How Multi-Account Pooling Works:
           </strong>
-          If you have multiple Google accounts, copy your primary account&apos;s User ID (
+          If you have multiple accounts, copy your primary account&apos;s User ID (
           <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold text-blue-700 border border-blue-200 shadow-xs">
             {myUserCode || "USR-XXXXX"}
           </code>
