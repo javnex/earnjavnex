@@ -4,12 +4,13 @@ import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Sparkles, ShieldCheck, Zap, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Sparkles, ShieldCheck, Zap, ArrowRight, CheckCircle2, Lock } from "lucide-react";
 
 export default function LoginPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [consentGiven, setConsentGiven] = useState(false);
 
   useEffect(() => {
     if (session) {
@@ -18,92 +19,134 @@ export default function LoginPage() {
   }, [session, router]);
 
   const handleGoogleLogin = async () => {
+    if (!consentGiven) return;
     setLoading(true);
     await signIn("google", { callbackUrl: "/dashboard" });
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-4 py-12 relative overflow-hidden">
-      {/* Background radial glows */}
-      <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 h-96 w-96 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-12 relative overflow-hidden selection:bg-blue-600 selection:text-white">
+      {/* Soft Ambient Blue Glare */}
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[900px] h-[400px] bg-gradient-to-b from-blue-500/[0.08] via-indigo-500/[0.03] to-transparent rounded-full blur-[140px] pointer-events-none -z-10" />
 
-      <div className="w-full max-w-md space-y-8 relative z-10">
-        {/* Brand Header */}
-        <div className="text-center space-y-2">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-600 to-cyan-500 shadow-xl shadow-emerald-500/20">
-            <Sparkles className="h-7 w-7 text-white" />
-          </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-white">
-            Review<span className="text-emerald-400">Reward</span>
+      <div className="w-full max-w-md space-y-8 relative z-10" id="main-content">
+        {/* Brand Header with Official Uploaded Logo */}
+        <div className="text-center space-y-3">
+          <Link href="/" className="inline-block group">
+            <div className="relative mx-auto h-20 w-20">
+              <div className="absolute -inset-1 bg-gradient-to-r from-blue-500/20 to-emerald-500/20 rounded-2xl blur-md group-hover:blur-lg transition-all" />
+              <img
+                src="/logo.png"
+                alt="ReviewReward Logo"
+                className="relative h-20 w-20 object-contain rounded-2xl shadow-md border border-slate-200 bg-white p-1.5 transition-transform group-hover:scale-105"
+              />
+            </div>
+          </Link>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900">
+            Review<span className="text-blue-600">Reward</span>
           </h1>
-          <p className="text-sm text-slate-400">
-            Earn ₹10 per review. Transfer with ₹0 fees. Withdraw in instant USDT.
+          <p className="text-xs text-slate-500">
+            Earn ₹10 per review. Transfer with ₹0 fees. Fast ₹100 bank payouts.
           </p>
         </div>
 
         {/* Login Card */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-7 shadow-2xl backdrop-blur-xl space-y-6">
+        <div className="glare-card rounded-3xl p-7 sm:p-8 space-y-6 bg-white border border-slate-200 shadow-xl shadow-blue-900/5">
           <div className="space-y-1">
-            <h2 className="text-lg font-semibold text-white">Welcome back</h2>
-            <p className="text-xs text-slate-400">
+            <h2 className="text-base font-bold text-slate-900 font-mono uppercase tracking-wider">Access Terminal</h2>
+            <p className="text-xs text-slate-500">
               Sign in with your Google account to access your tasks and web wallet.
             </p>
+          </div>
+
+          {/* Explicit Affirmative Consent Checkbox under India DPDP Act 2023 */}
+          <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-2">
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={consentGiven}
+                onChange={(e) => setConsentGiven(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-blue-300 bg-white text-blue-600 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-blue-600"
+              />
+              <span className="text-xs text-slate-700 font-sans leading-relaxed">
+                I am <strong>18 years of age or older</strong>, and I provide my free, specific, and affirmative consent to the processing of my digital personal data under the{" "}
+                <Link href="/privacy" target="_blank" className="text-blue-600 underline font-semibold hover:text-blue-800">
+                  Privacy Notice
+                </Link>{" "}
+                and agree to the{" "}
+                <Link href="/terms" target="_blank" className="text-blue-600 underline font-semibold hover:text-blue-800">
+                  Terms of Service
+                </Link>
+                .
+              </span>
+            </label>
           </div>
 
           {/* Google Sign-in Button */}
           <button
             onClick={handleGoogleLogin}
-            disabled={loading || status === "loading"}
-            className="w-full flex items-center justify-center gap-3 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-750 px-4 py-3.5 text-sm font-semibold text-white shadow-md hover:border-slate-600 transition-all cursor-pointer disabled:opacity-50"
+            disabled={loading || status === "loading" || !consentGiven}
+            className="btn-futuristic w-full flex items-center justify-center gap-3 rounded-2xl px-5 py-3.5 text-xs font-bold text-white shadow-lg shadow-blue-500/25 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <svg className="h-5 w-5" viewBox="0 0 24 24">
+            <svg className="h-4 w-4" viewBox="0 0 24 24">
               <path
-                fill="#4285F4"
+                fill="#ffffff"
                 d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.28-2.1 3.665-5.2 3.665-9.12z"
               />
               <path
-                fill="#34A853"
+                fill="#ffffff"
                 d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.13C3.25 21.31 7.31 24 12 24z"
               />
               <path
-                fill="#FBBC05"
+                fill="#ffffff"
                 d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.57H1.26C.46 8.17 0 9.99 0 12s.46 3.83 1.26 5.43l4.02-3.14z"
               />
               <path
-                fill="#EA4335"
+                fill="#ffffff"
                 d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.69 1.26 6.57l4.02 3.14c.95-2.83 3.6-4.96 6.72-4.96z"
               />
             </svg>
             <span>{loading ? "Connecting to Google..." : "Continue with Google"}</span>
           </button>
 
+          {!consentGiven && (
+            <p className="text-[11px] text-blue-700 font-mono text-center">
+              Please check the affirmative consent box above to proceed.
+            </p>
+          )}
+
           {/* Key platform perks */}
-          <div className="pt-3 border-t border-slate-800/80 space-y-2 text-xs text-slate-300">
+          <div className="pt-4 border-t border-slate-100 space-y-2.5 text-xs text-slate-700">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
               <span>Strict 1 review per shop per Google account</span>
             </div>
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-cyan-400 shrink-0" />
-              <span>₹0 Fee Internal Transfers to pool multiple IDs</span>
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>₹0 Fee Internal Transfers to pool multiple accounts</span>
             </div>
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-              <span>Instant Polygon USDT payouts with 6% bank cashout buffer</span>
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>Fast ₹100 direct bank withdrawals with +14% fee buffer</span>
             </div>
           </div>
         </div>
 
-        {/* Back to Home */}
-        <div className="text-center">
+        {/* Back to Home & Legal Links */}
+        <div className="text-center space-y-2">
           <Link
             href="/"
-            className="text-xs text-slate-400 hover:text-emerald-400 transition-colors inline-flex items-center gap-1"
+            className="text-xs font-mono text-slate-500 hover:text-blue-600 transition-colors"
           >
-            <span>Learn more about how ReviewReward works</span>
-            <ArrowRight className="h-3 w-3" />
+            ← Back to Home
           </Link>
+          <div className="flex justify-center gap-3 text-[11px] font-mono text-slate-400">
+            <Link href="/privacy" className="hover:text-blue-600 underline">Privacy Notice</Link>
+            <span>•</span>
+            <Link href="/terms" className="hover:text-blue-600 underline">Terms</Link>
+            <span>•</span>
+            <Link href="/grievance" className="hover:text-blue-600 underline">Grievance Officer</Link>
+          </div>
         </div>
       </div>
     </div>

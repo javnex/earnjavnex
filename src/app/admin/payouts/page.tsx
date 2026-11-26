@@ -4,11 +4,7 @@ import { useEffect, useState } from "react";
 import {
   ArrowRightLeft,
   Wallet,
-  Clock,
   ExternalLink,
-  Users,
-  Search,
-  Sparkles,
 } from "lucide-react";
 
 export default function AdminPayoutsPage() {
@@ -48,35 +44,35 @@ export default function AdminPayoutsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
-            <ArrowRightLeft className="h-6 w-6 text-violet-400" />
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2.5">
+            <ArrowRightLeft className="h-6 w-6 text-blue-600" />
             <span>Transfers & Payout Audit Logs</span>
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Complete transparency into peer-to-peer account pooling and automated NOWPayments Polygon crypto payouts.
+          <p className="text-xs text-slate-500 mt-1 font-mono">
+            Audited ledger for peer-to-peer account pooling and automated NOWPayments Polygon crypto payouts.
           </p>
         </div>
 
         {/* Tab switch */}
-        <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800">
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
           <button
             onClick={() => setActiveTab("TRANSFERS")}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
               activeTab === "TRANSFERS"
-                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
-                : "text-slate-400 hover:text-white"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white"
             }`}
           >
             P2P Transfers ({transfers.length})
           </button>
           <button
             onClick={() => setActiveTab("WITHDRAWALS")}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
               activeTab === "WITHDRAWALS"
-                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                : "text-slate-400 hover:text-white"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white"
             }`}
           >
             Crypto Payouts ({withdrawals.length})
@@ -84,37 +80,38 @@ export default function AdminPayoutsPage() {
         </div>
       </div>
 
-      {/* Main Table */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 space-y-4">
+      {/* Main Table Container */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-4">
         {loading ? (
-          <div className="py-12 text-center text-xs text-slate-500 animate-pulse">
+          <div className="py-16 text-center text-xs text-slate-500 font-mono animate-pulse">
             Loading audit records...
           </div>
         ) : activeTab === "TRANSFERS" ? (
           /* Transfers Table */
           transfers.length === 0 ? (
-            <div className="py-12 text-center text-xs text-slate-500">
-              No internal transfers recorded yet.
+            <div className="py-16 text-center text-xs text-slate-500 font-mono space-y-2">
+              <ArrowRightLeft className="h-8 w-8 text-slate-400 mx-auto" />
+              <p>No internal transfers recorded yet.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
-                    <th className="pb-3 font-semibold">Date</th>
-                    <th className="pb-3 font-semibold">Sender (Pool Account)</th>
-                    <th className="pb-3 font-semibold">Receiver (Main ID)</th>
-                    <th className="pb-3 font-semibold">Amount</th>
-                    <th className="pb-3 font-semibold">Fee</th>
-                    <th className="pb-3 font-semibold">Remarks</th>
+                  <tr className="border-b border-slate-200 text-slate-500 uppercase text-[10px] font-mono tracking-wider">
+                    <th className="pb-3.5 font-semibold">Date</th>
+                    <th className="pb-3.5 font-semibold">Sender (Pool Account)</th>
+                    <th className="pb-3.5 font-semibold">Receiver (Main ID)</th>
+                    <th className="pb-3.5 font-semibold">Amount</th>
+                    <th className="pb-3.5 font-semibold">Fee</th>
+                    <th className="pb-3.5 font-semibold">Remarks</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60">
+                <tbody className="divide-y divide-slate-100">
                   {transfers.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-slate-850/50">
-                      <td className="py-3 text-slate-400 font-mono text-[11px]">
+                    <tr key={tx.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-4 text-slate-500 font-mono text-[11px]">
                         {new Date(tx.createdAt).toLocaleDateString()}{" "}
-                        <span className="text-slate-500">
+                        <span className="text-slate-400">
                           {new Date(tx.createdAt).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -122,33 +119,33 @@ export default function AdminPayoutsPage() {
                         </span>
                       </td>
 
-                      <td className="py-3">
-                        <div className="font-semibold text-white">
+                      <td className="py-4">
+                        <div className="font-bold text-slate-900">
                           {tx.sender?.name || tx.sender?.email}
                         </div>
-                        <div className="text-[10px] font-mono text-cyan-400">
-                          {tx.sender?.userCode}
+                        <div className="text-[10px] font-mono text-slate-500">
+                          ID: <span className="text-blue-600 font-bold">{tx.sender?.userCode}</span>
                         </div>
                       </td>
 
-                      <td className="py-3">
-                        <div className="font-semibold text-emerald-300">
+                      <td className="py-4">
+                        <div className="font-bold text-slate-900">
                           {tx.receiver?.name || tx.receiver?.email}
                         </div>
-                        <div className="text-[10px] font-mono text-emerald-400">
-                          {tx.receiver?.userCode}
+                        <div className="text-[10px] font-mono text-slate-500">
+                          ID: <span className="text-blue-600 font-bold">{tx.receiver?.userCode}</span>
                         </div>
                       </td>
 
-                      <td className="py-3 font-mono font-bold text-white">
-                        ₹{tx.amountInr.toFixed(0)} INR
+                      <td className="py-4 font-mono font-black text-emerald-600 text-sm">
+                        ₹{tx.amountInr.toFixed(0)} <span className="text-[10px] text-slate-400 font-normal">INR</span>
                       </td>
 
-                      <td className="py-3 text-emerald-400 font-bold text-[11px]">
+                      <td className="py-4 text-emerald-700 font-mono font-bold text-[11px]">
                         ₹0 (Free)
                       </td>
 
-                      <td className="py-3 text-slate-400 text-[11px] italic">
+                      <td className="py-4 text-slate-500 font-mono text-[11px] italic">
                         {tx.note || "—"}
                       </td>
                     </tr>
@@ -160,81 +157,82 @@ export default function AdminPayoutsPage() {
         ) : (
           /* Withdrawals Table */
           withdrawals.length === 0 ? (
-            <div className="py-12 text-center text-xs text-slate-500">
-              No crypto withdrawals recorded yet.
+            <div className="py-16 text-center text-xs text-slate-500 font-mono space-y-2">
+              <Wallet className="h-8 w-8 text-slate-400 mx-auto" />
+              <p>No crypto withdrawals recorded yet.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
-                    <th className="pb-3 font-semibold">Date</th>
-                    <th className="pb-3 font-semibold">User</th>
-                    <th className="pb-3 font-semibold">INR (Base + 6% Buffer)</th>
-                    <th className="pb-3 font-semibold">USDT Sent</th>
-                    <th className="pb-3 font-semibold">Polygon Address</th>
-                    <th className="pb-3 font-semibold">Status</th>
-                    <th className="pb-3 font-semibold text-right">Blockchain Tx</th>
+                  <tr className="border-b border-slate-200 text-slate-500 uppercase text-[10px] font-mono tracking-wider">
+                    <th className="pb-3.5 font-semibold">Date</th>
+                    <th className="pb-3.5 font-semibold">User</th>
+                    <th className="pb-3.5 font-semibold">INR (Base + 6% Buffer)</th>
+                    <th className="pb-3.5 font-semibold">USDT Sent</th>
+                    <th className="pb-3.5 font-semibold">Polygon Address</th>
+                    <th className="pb-3.5 font-semibold">Status</th>
+                    <th className="pb-3.5 font-semibold text-right">Blockchain Tx</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60">
+                <tbody className="divide-y divide-slate-100">
                   {withdrawals.map((w) => (
-                    <tr key={w.id} className="hover:bg-slate-850/50">
-                      <td className="py-3 text-slate-400 font-mono text-[11px]">
+                    <tr key={w.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-4 text-slate-500 font-mono text-[11px]">
                         {new Date(w.createdAt).toLocaleDateString()}
                       </td>
 
-                      <td className="py-3">
-                        <div className="font-semibold text-white">
+                      <td className="py-4">
+                        <div className="font-bold text-slate-900">
                           {w.user?.name || w.user?.email}
                         </div>
-                        <div className="text-[10px] font-mono text-slate-400">
-                          {w.user?.userCode}
+                        <div className="text-[10px] font-mono text-slate-500">
+                          ID: <span className="text-blue-600 font-bold">{w.user?.userCode}</span>
                         </div>
                       </td>
 
-                      <td className="py-3 font-mono">
-                        <span className="font-bold text-white">₹{w.amountInr}</span>{" "}
-                        <span className="text-[10px] text-emerald-400">
+                      <td className="py-4 font-mono">
+                        <span className="font-black text-slate-900">₹{w.amountInr}</span>{" "}
+                        <span className="text-[10px] text-emerald-600 font-semibold">
                           (₹{w.bufferedInr.toFixed(1)})
                         </span>
                       </td>
 
-                      <td className="py-3 font-mono font-bold text-emerald-400">
+                      <td className="py-4 font-mono font-black text-blue-600">
                         {w.usdtAmount.toFixed(4)} USDT
                       </td>
 
-                      <td className="py-3 font-mono text-[11px] text-slate-400">
+                      <td className="py-4 font-mono text-[11px] text-slate-500">
                         {w.walletAddress.slice(0, 8)}...{w.walletAddress.slice(-4)}
                       </td>
 
-                      <td className="py-3">
+                      <td className="py-4">
                         <span
-                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-mono font-bold ${
                             w.status === "FINISHED"
-                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                               : w.status === "PROCESSING"
-                              ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 animate-pulse"
-                              : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                              ? "bg-amber-50 text-amber-700 border border-amber-200 animate-pulse"
+                              : "bg-red-50 text-red-600 border border-red-200"
                           }`}
                         >
                           {w.status}
                         </span>
                       </td>
 
-                      <td className="py-3 text-right">
+                      <td className="py-4 text-right">
                         {w.txHash ? (
                           <a
                             href={`https://polygonscan.com/tx/${w.txHash}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-1 font-mono text-emerald-400 hover:text-emerald-300 text-[11px] underline"
+                            className="inline-flex items-center gap-1 font-mono text-blue-600 hover:underline text-[11px] font-semibold"
                           >
                             <span>{w.txHash.slice(0, 8)}...</span>
-                            <ExternalLink className="h-3 w-3" />
+                            <ExternalLink className="h-3 w-3 text-blue-500" />
                           </a>
                         ) : (
-                          <span className="text-slate-500 text-[11px]">
+                          <span className="text-slate-400 text-[11px] font-mono">
                             {w.errorMessage || "Processing"}
                           </span>
                         )}

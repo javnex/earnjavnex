@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import authOptions, { isAdminEmail } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { z } from "zod";
 
 const updateTaskSchema = z.object({
@@ -36,11 +37,24 @@ export async function PATCH(
       );
     }
 
-    const existing = await prisma.task.findUnique({ where: { id } });
-    if (!existing) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    // 1. Try fast HTTPS via Supabase (Port 443 - zero timeout)
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data: updatedTask, error: updateErr } = await supabase
+        .from("Task")
+        .update(parsed.data)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (!updateErr && updatedTask) {
+        return NextResponse.json({ task: updatedTask });
+      }
+    } catch (supaErr) {
+      console.warn("Supabase task PATCH fallback to prisma:", supaErr);
     }
 
+    // Fallback to Prisma
     const updatedTask = await prisma.task.update({
       where: { id },
       data: parsed.data,
@@ -50,7 +64,7 @@ export async function PATCH(
   } catch (error: any) {
     console.error("PATCH /api/tasks/[id] error:", error);
     return NextResponse.json(
-      { error: "Failed to update task" },
+      { error: error?.message || "Failed to update task" },
       { status: 500 }
     );
   }
@@ -69,13 +83,31 @@ export async function DELETE(
     }
 
     const { id } = await params;
+
+    // 1. Try fast HTTPS via Supabase (Port 443 - zero timeout)
+    try {
+      const supabase = getSupabaseAdmin();
+      // First clean up any submissions referencing this task to avoid foreign key violations
+      await supabase.from("Submission").delete().eq("taskId", id);
+
+      // Now delete the task
+      const { error: delErr } = await supabase.from("Task").delete().eq("id", id);
+      if (!delErr) {
+        return NextResponse.json({ success: true });
+      }
+    } catch (supaErr) {
+      console.warn("Supabase task DELETE fallback to prisma:", supaErr);
+    }
+
+    // Fallback to Prisma
+    await prisma.submission.deleteMany({ where: { taskId: id } }).catch(() => {});
     await prisma.task.delete({ where: { id } });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("DELETE /api/tasks/[id] error:", error);
     return NextResponse.json(
-      { error: "Failed to delete task" },
+      { error: error?.message || "Failed to delete task" },
       { status: 500 }
     );
   }

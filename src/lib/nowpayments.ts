@@ -159,6 +159,7 @@ export async function executeNowpaymentsPayout(params: {
   withdrawalId: string;
   walletAddress: string;
   usdtAmount: number;
+  network?: string; // "BSC" | "POLYGON"
 }): Promise<{
   success: boolean;
   batchId?: string;
@@ -167,14 +168,17 @@ export async function executeNowpaymentsPayout(params: {
   simulated?: boolean;
   error?: string;
 }> {
-  const { withdrawalId, walletAddress, usdtAmount } = params;
+  const { withdrawalId, walletAddress, usdtAmount, network = "BSC" } = params;
 
-  // Validation: Polygon/EVM address format
+  // Validation: EVM address format (BSC and Polygon both use 42-char 0x... format)
   if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
     throw new Error(
-      "Invalid Polygon wallet address. Must be a 42-character EVM address starting with 0x."
+      "Invalid EVM wallet address. Must be a 42-character address starting with 0x."
     );
   }
+
+  // Ticker: usdtbsc (CoinDCX / BSC BEP-20) or usdtmatic (Polygon)
+  const currencyTicker = network.toUpperCase() === "POLYGON" ? "usdtmatic" : "usdtbsc";
 
   // If live credentials are not set, run seamless sandbox / simulated payout
   if (!NOWPAYMENTS_API_KEY || !NOWPAYMENTS_EMAIL || !NOWPAYMENTS_PASSWORD) {
@@ -209,7 +213,7 @@ export async function executeNowpaymentsPayout(params: {
       withdrawals: [
         {
           address: walletAddress,
-          currency: "usdtmatic",
+          currency: currencyTicker,
           amount: usdtAmount,
           unique_external_id: withdrawalId,
         },

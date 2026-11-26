@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import authOptions, { isAdminEmail } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { getNowpaymentsBalance } from "@/lib/nowpayments";
 
 // GET /api/admin/stats
@@ -11,6 +12,64 @@ export async function GET() {
     const email = (session?.user as any)?.email;
     if (!session || (session.user as any)?.role !== "ADMIN" || !isAdminEmail(email)) {
       return NextResponse.json({ error: "Forbidden: Admin access only" }, { status: 403 });
+    }
+
+    try {
+      const supabase = getSupabaseAdmin();
+      const [
+        { count: activeTasksCount },
+        { count: closedTasksCount },
+        { count: verifiedSubmissionsCount },
+        { count: pendingSubmissionsCount },
+        { data: allUsers },
+        { data: allWithdrawals },
+      ] = await Promise.all([
+        supabase.from("Task").select("*", { count: "exact", head: true }).eq("status", "ACTIVE"),
+        supabase.from("Task").select("*", { count: "exact", head: true }).eq("status", "CLOSED"),
+        supabase.from("Submission").select("*", { count: "exact", head: true }).eq("status", "APPROVED"),
+        supabase.from("Submission").select("*", { count: "exact", head: true }).eq("status", "PENDING"),
+        supabase.from("User").select("walletBalance"),
+        supabase.from("Withdrawal").select("usdtAmount, amountInr, status"),
+      ]);
+
+      const totalUserWalletBalanceInr = (allUsers || []).reduce(
+        (sum, u) => sum + (u.walletBalance || 0),
+        0
+      );
+      const finishedWithdrawals = (allWithdrawals || []).filter((w) => w.status === "FINISHED");
+      const totalWithdrawnUsdt = finishedWithdrawals.reduce(
+        (sum, w) => sum + (w.usdtAmount || 0),
+        0
+      );
+      const totalWithdrawnInr = finishedWithdrawals.reduce(
+        (sum, w) => sum + (w.amountInr || 0),
+        0
+      );
+
+      const nowpayments = await getNowpaymentsBalance();
+
+      return NextResponse.json({
+        stats: {
+          activeTasks: activeTasksCount || 0,
+          closedTasks: closedTasksCount || 0,
+          totalTasks: (activeTasksCount || 0) + (closedTasksCount || 0),
+          verifiedSubmissions: verifiedSubmissionsCount || 0,
+          pendingSubmissions: pendingSubmissionsCount || 0,
+          totalUsers: (allUsers || []).length,
+          totalUserWalletBalanceInr,
+          totalWithdrawnUsdt,
+          totalWithdrawnInr,
+          completedWithdrawalsCount: finishedWithdrawals.length,
+          nowpaymentsCustodyUsdt: Number(
+            (
+              (nowpayments.balances?.usdtmatic?.amount ?? 0) +
+              (nowpayments.balances?.usdtbsc?.amount ?? 0)
+            ).toFixed(4)
+          ),
+        },
+      });
+    } catch (supaErr) {
+      console.warn("Supabase stats fallback to prisma:", supaErr);
     }
 
     const [

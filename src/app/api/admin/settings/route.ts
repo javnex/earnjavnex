@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import authOptions, { isAdminEmail } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { z } from "zod";
 
 const settingsSchema = z.object({
@@ -14,6 +15,21 @@ const settingsSchema = z.object({
 // GET /api/admin/settings
 export async function GET() {
   try {
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data: supaSetting, error: sErr } = await supabase
+        .from("Setting")
+        .select("*")
+        .eq("id", "default")
+        .maybeSingle();
+
+      if (!sErr && supaSetting) {
+        return NextResponse.json({ setting: supaSetting });
+      }
+    } catch (supaErr) {
+      console.warn("Supabase settings fallback to prisma:", supaErr);
+    }
+
     const setting = await prisma.setting.upsert({
       where: { id: "default" },
       update: {},
@@ -50,6 +66,25 @@ export async function PATCH(req: Request) {
         { error: parsed.error.issues[0]?.message || "Invalid input" },
         { status: 400 }
       );
+    }
+
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data: updatedSupa, error: uErr } = await supabase
+        .from("Setting")
+        .upsert({
+          id: "default",
+          ...parsed.data,
+          updatedAt: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (!uErr && updatedSupa) {
+        return NextResponse.json({ success: true, setting: updatedSupa });
+      }
+    } catch (supaErr) {
+      console.warn("Supabase update settings fallback to prisma:", supaErr);
     }
 
     const updated = await prisma.setting.upsert({

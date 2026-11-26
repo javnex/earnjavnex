@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Clock,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 
 export default function HistoryPage() {
@@ -108,8 +109,8 @@ export default function HistoryPage() {
     events.push({
       id: "with-" + w.id,
       type: "WITHDRAWAL",
-      title: `USDT Polygon Payout (${w.usdtAmount} USDT)`,
-      subtitle: `To: ${w.walletAddress.slice(0, 10)}...${w.walletAddress.slice(-6)}`,
+      title: `Polygon USDT Payout (${w.usdtAmount} USDT)`,
+      subtitle: `Address: ${w.walletAddress.slice(0, 8)}...${w.walletAddress.slice(-6)}`,
       amount: w.amountInr,
       isCredit: false,
       date: new Date(w.createdAt),
@@ -121,6 +122,7 @@ export default function HistoryPage() {
   events.sort((a, b) => b.date.getTime() - a.date.getTime());
 
   const filteredEvents = events.filter((e) => {
+    if (filter === "ALL") return true;
     if (filter === "TASKS") return e.type === "TASK";
     if (filter === "TRANSFERS")
       return e.type === "TRANSFER_SENT" || e.type === "TRANSFER_RECEIVED";
@@ -128,30 +130,37 @@ export default function HistoryPage() {
     return true;
   });
 
+  const totalEarned = submissions
+    .filter((s) => s.status === "APPROVED")
+    .reduce((acc, s) => acc + (s.rewardCredited || 10), 0);
+  const totalWithdrawn = withdrawals
+    .filter((w) => w.status === "FINISHED")
+    .reduce((acc, w) => acc + (w.amountInr || 0), 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
-            <History className="h-6 w-6 text-emerald-400" />
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2.5">
+            <History className="h-6 w-6 text-blue-600" />
             <span>Wallet Transaction Ledger</span>
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Complete audit trail of your review task earnings, ₹0 internal transfers, and Polygon USDT payouts.
+          <p className="text-xs text-slate-500 mt-1 font-mono">
+            Audited blockchain and micro-task ledger for task rewards, internal transfers, and Polygon payouts.
           </p>
         </div>
 
         {/* Filter Pills */}
-        <div className="flex flex-wrap items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800">
+        <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
           {(["ALL", "TASKS", "TRANSFERS", "WITHDRAWALS"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
                 filter === tab
-                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-blue-600 text-white shadow-sm shadow-blue-500/25"
+                  : "text-slate-600 hover:text-blue-600 hover:bg-white"
               }`}
             >
               {tab}
@@ -160,54 +169,87 @@ export default function HistoryPage() {
         </div>
       </div>
 
-      {/* Ledger Table */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 space-y-4">
+      {/* Top Summary Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="glare-card rounded-2xl p-5 space-y-1 bg-white border border-slate-200">
+          <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500">
+            Total Task Earnings
+          </span>
+          <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-600">
+            ₹{totalEarned}
+          </div>
+          <p className="text-[10px] text-slate-400 font-mono">{submissions.length} verified review tasks</p>
+        </div>
+
+        <div className="glare-card rounded-2xl p-5 space-y-1 bg-white border border-slate-200">
+          <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500">
+            Internal P2P Transfers
+          </span>
+          <div className="text-2xl sm:text-3xl font-black font-mono text-blue-600">
+            {transfers.length}
+          </div>
+          <p className="text-[10px] text-slate-400 font-mono">₹0 fee multi-account pool events</p>
+        </div>
+
+        <div className="glare-card rounded-2xl p-5 space-y-1 bg-white border border-slate-200">
+          <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-500">
+            Total Withdrawn
+          </span>
+          <div className="text-2xl sm:text-3xl font-black font-mono text-indigo-600">
+            ₹{totalWithdrawn}
+          </div>
+          <p className="text-[10px] text-slate-400 font-mono">{withdrawals.length} completed withdrawals</p>
+        </div>
+      </div>
+
+      {/* Ledger List Container */}
+      <div className="glare-card rounded-2xl p-5 sm:p-6 space-y-4 bg-white border border-slate-200">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+          <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-mono flex items-center gap-2">
+            <Clock className="h-4 w-4 text-blue-600" />
+            <span>Ledger Entries ({filteredEvents.length})</span>
+          </h2>
+          <span className="text-xs text-slate-500 font-mono">
+            Audited & Verified Record
+          </span>
+        </div>
+
         {loading ? (
-          <div className="py-12 text-center text-xs text-slate-500 animate-pulse">
+          <div className="py-16 text-center text-xs text-slate-400 font-mono animate-pulse">
             Loading ledger events...
           </div>
         ) : filteredEvents.length === 0 ? (
-          <div className="py-12 text-center text-xs text-slate-500 space-y-2">
-            <Clock className="h-8 w-8 text-slate-600 mx-auto" />
+          <div className="py-16 text-center text-xs text-slate-400 font-mono space-y-2">
+            <Clock className="h-8 w-8 text-slate-300 mx-auto" />
             <p>No activity found under this filter.</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-800/60">
+          <div className="space-y-3">
             {filteredEvents.map((e) => (
               <div
                 key={e.id}
-                className="py-3.5 flex items-center justify-between gap-4 hover:bg-slate-850/40 px-2 rounded-xl transition-colors"
+                className="glass-panel p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:border-blue-300 bg-white"
               >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`p-2.5 rounded-xl border ${
-                      e.type === "TASK"
-                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                        : e.type === "TRANSFER_RECEIVED"
-                        ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"
-                        : e.type === "TRANSFER_SENT"
-                        ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                        : "bg-purple-500/10 border-purple-500/20 text-purple-400"
-                    }`}
-                  >
-                    {e.type === "TASK" && <ListTodo className="h-4 w-4" />}
+                <div className="flex items-center gap-3.5">
+                  <div className="p-3 rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 shadow-xs shrink-0">
+                    {e.type === "TASK" && <ListTodo className="h-4 w-4 text-emerald-600" />}
                     {e.type === "TRANSFER_RECEIVED" && (
-                      <ArrowDownLeft className="h-4 w-4" />
+                      <ArrowDownLeft className="h-4 w-4 text-blue-600" />
                     )}
                     {e.type === "TRANSFER_SENT" && (
-                      <ArrowUpRight className="h-4 w-4" />
+                      <ArrowUpRight className="h-4 w-4 text-amber-600" />
                     )}
-                    {e.type === "WITHDRAWAL" && <Wallet className="h-4 w-4" />}
+                    {e.type === "WITHDRAWAL" && <Wallet className="h-4 w-4 text-indigo-600" />}
                   </div>
 
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">
+                  <div className="space-y-0.5">
+                    <h3 className="text-sm font-bold text-slate-900">
                       {e.title}
                     </h3>
-                    <p className="text-xs text-slate-400 truncate max-w-xs sm:max-w-md">
+                    <p className="text-xs text-slate-500 truncate max-w-xs sm:max-w-md font-mono">
                       {e.subtitle}
                     </p>
-                    <span className="text-[10px] text-slate-500 font-mono">
+                    <span className="text-[10px] text-slate-400 font-mono block">
                       {e.date.toLocaleDateString()}{" "}
                       {e.date.toLocaleTimeString([], {
                         hour: "2-digit",
@@ -217,23 +259,19 @@ export default function HistoryPage() {
                   </div>
                 </div>
 
-                <div className="text-right space-y-1 shrink-0">
-                  <div
-                    className={`text-sm font-mono font-extrabold ${
-                      e.isCredit ? "text-emerald-400" : "text-slate-300"
-                    }`}
-                  >
+                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1.5 shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-slate-100">
+                  <div className={`text-base font-mono font-black ${e.isCredit ? "text-emerald-600" : "text-slate-900"}`}>
                     {e.isCredit ? "+" : "-"}₹{e.amount.toFixed(0)}
                   </div>
                   <span
-                    className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                    className={`inline-block rounded-full px-2.5 py-0.5 text-[9px] font-mono font-bold ${
                       e.status === "APPROVED" ||
                       e.status === "COMPLETED" ||
                       e.status === "FINISHED"
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs"
                         : e.status === "PROCESSING" || e.status === "PENDING"
-                        ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                        : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                        ? "bg-amber-50 text-amber-700 border border-amber-200 animate-pulse"
+                        : "bg-slate-100 text-slate-600 border border-slate-200"
                     }`}
                   >
                     {e.status}

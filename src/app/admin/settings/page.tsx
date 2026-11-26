@@ -7,7 +7,13 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
-  HelpCircle,
+  Coins,
+  ShieldCheck,
+  RefreshCw,
+  ExternalLink,
+  Copy,
+  Check,
+  ArrowDownToLine,
 } from "lucide-react";
 
 export default function AdminSettingsPage() {
@@ -22,6 +28,72 @@ export default function AdminSettingsPage() {
   const [cashoutBufferPercent, setCashoutBufferPercent] = useState("6.0");
   const [minWithdrawalInr, setMinWithdrawalInr] = useState("100");
   const [usdtInrRate, setUsdtInrRate] = useState("90.5");
+
+  // NOWPayments Connection Test State
+  const [testingNp, setTestingNp] = useState(false);
+  const [npResult, setNpResult] = useState<{
+    connected?: boolean;
+    mode?: string;
+    message?: string;
+    checks?: any;
+    configStatus?: any;
+  } | null>(null);
+
+  const handleTestNowpayments = async () => {
+    try {
+      setTestingNp(true);
+      const res = await fetch("/api/admin/nowpayments/test", { method: "POST" });
+      const data = await res.json();
+      setNpResult(data);
+    } catch (err: any) {
+      setNpResult({
+        connected: false,
+        message: err.message || "Failed to reach test endpoint",
+      });
+    } finally {
+      setTestingNp(false);
+    }
+  };
+
+  // Top-Up Custody State
+  const [topupAmount, setTopupAmount] = useState("10");
+  const [generatingDeposit, setGeneratingDeposit] = useState(false);
+  const [depositData, setDepositData] = useState<{
+    depositAddress?: string;
+    amountToPay?: number;
+    currency?: string;
+    network?: string;
+    instructions?: string;
+  } | null>(null);
+  const [copiedAddr, setCopiedAddr] = useState(false);
+
+  const handleGenerateDeposit = async () => {
+    try {
+      setGeneratingDeposit(true);
+      const res = await fetch("/api/admin/nowpayments/deposit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amountUsd: parseFloat(topupAmount) || 10 }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDepositData(data);
+      } else {
+        alert(data.error || "Failed to generate deposit address");
+      }
+    } catch (e: any) {
+      alert(e.message || "Error generating deposit address");
+    } finally {
+      setGeneratingDeposit(false);
+    }
+  };
+
+  const copyDepositAddress = () => {
+    if (!depositData?.depositAddress) return;
+    navigator.clipboard.writeText(depositData.depositAddress);
+    setCopiedAddr(true);
+    setTimeout(() => setCopiedAddr(false), 2000);
+  };
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -74,12 +146,12 @@ export default function AdminSettingsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="border-b border-slate-800 pb-5">
-        <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
-          <Settings className="h-6 w-6 text-violet-400" />
+      <div className="border-b border-slate-200 pb-5">
+        <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2.5">
+          <Settings className="h-6 w-6 text-blue-600" />
           <span>System Settings & Configuration</span>
         </h1>
-        <p className="text-sm text-slate-400 mt-1">
+        <p className="text-xs text-slate-500 mt-1 font-mono">
           Configure payout buffers, minimum thresholds, and review verification logic.
         </p>
       </div>
@@ -87,37 +159,37 @@ export default function AdminSettingsPage() {
       {/* Alert Banner */}
       {message && (
         <div
-          className={`flex items-start gap-3 rounded-xl p-4 text-sm font-medium border ${
+          className={`flex items-start gap-3 rounded-2xl p-4 text-xs font-mono font-medium border ${
             message.type === "success"
-              ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
-              : "bg-rose-950/60 border-rose-500/40 text-rose-300"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+              : "bg-red-50 border-red-200 text-red-800"
           }`}
         >
           {message.type === "success" ? (
-            <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
           ) : (
-            <AlertCircle className="h-5 w-5 text-rose-400 shrink-0 mt-0.5" />
+            <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
           )}
           <span className="flex-1">{message.text}</span>
           <button
             onClick={() => setMessage(null)}
-            className="text-xs hover:underline text-slate-400"
+            className="text-xs hover:underline text-slate-500 cursor-pointer"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      <div className="max-w-2xl rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl space-y-6">
+      <div className="max-w-2xl bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-7 space-y-6">
         {loading ? (
-          <div className="py-8 text-center text-xs text-slate-400 animate-pulse">
-            Loading settings...
+          <div className="py-12 text-center text-xs text-slate-500 font-mono animate-pulse">
+            Loading platform settings...
           </div>
         ) : (
           <form onSubmit={handleSave} className="space-y-5">
             {/* Verification Mode */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">
+            <div className="space-y-2">
+              <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider block">
                 Review Verification Mode
               </label>
               <select
@@ -125,10 +197,10 @@ export default function AdminSettingsPage() {
                 onChange={(e) =>
                   setVerificationMode(e.target.value as "AUTO" | "MANUAL")
                 }
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs text-white focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="w-full rounded-xl futuristic-input px-3.5 py-2.5 text-xs text-slate-900 font-mono bg-white"
               >
                 <option value="AUTO">
-                  Instant Auto-Approval (Recommended - URL syntax & duplicate check passes → ₹10 credited instantly)
+                  Instant Auto-Approval (URL syntax & duplicate check passes → ₹10 credited instantly)
                 </option>
                 <option value="MANUAL">
                   Manual Admin Approval (Submissions marked Pending until Admin verifies in Queue)
@@ -137,12 +209,12 @@ export default function AdminSettingsPage() {
             </div>
 
             {/* Cash-out Buffer Percent */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between">
-                <label className="text-xs font-semibold text-slate-300">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
                   Cash-Out Conversion Buffer (%)
                 </label>
-                <span className="text-[11px] text-emerald-400 font-mono">
+                <span className="text-[11px] text-blue-600 font-mono font-bold">
                   Default: 6.0%
                 </span>
               </div>
@@ -153,20 +225,20 @@ export default function AdminSettingsPage() {
                 max="50"
                 value={cashoutBufferPercent}
                 onChange={(e) => setCashoutBufferPercent(e.target.value)}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs text-white font-mono focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="w-full rounded-xl futuristic-input px-3.5 py-2.5 text-xs text-slate-900 font-mono"
               />
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-500 font-mono leading-relaxed">
                 Added automatically onto user withdrawals to cover Indian exchange spreads and 1% TDS when selling USDT for INR.
               </p>
             </div>
 
             {/* Minimum Withdrawal INR */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between">
-                <label className="text-xs font-semibold text-slate-300">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
                   Minimum Withdrawal Threshold (₹ INR)
                 </label>
-                <span className="text-[11px] text-slate-400 font-mono">
+                <span className="text-[11px] text-blue-600 font-mono font-bold">
                   Default: ₹100
                 </span>
               </div>
@@ -176,17 +248,17 @@ export default function AdminSettingsPage() {
                 min="10"
                 value={minWithdrawalInr}
                 onChange={(e) => setMinWithdrawalInr(e.target.value)}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs text-white font-mono focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="w-full rounded-xl futuristic-input px-3.5 py-2.5 text-xs text-slate-900 font-mono"
               />
             </div>
 
             {/* USDT / INR Fallback Rate */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between">
-                <label className="text-xs font-semibold text-slate-300">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
                   USDT / INR Exchange Rate Fallback
                 </label>
-                <span className="text-[11px] text-slate-400 font-mono">
+                <span className="text-[11px] text-slate-500 font-mono">
                   Live CoinGecko with Fallback
                 </span>
               </div>
@@ -196,32 +268,260 @@ export default function AdminSettingsPage() {
                 min="50"
                 value={usdtInrRate}
                 onChange={(e) => setUsdtInrRate(e.target.value)}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs text-white font-mono focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="w-full rounded-xl futuristic-input px-3.5 py-2.5 text-xs text-slate-900 font-mono"
               />
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-500 font-mono leading-relaxed">
                 Used if CoinGecko public API is temporarily rate-limited.
               </p>
             </div>
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-violet-500/20 transition-all cursor-pointer disabled:opacity-50"
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex items-center justify-center gap-2 rounded-xl btn-futuristic px-6 py-2.5 text-xs font-mono font-bold transition-all cursor-pointer disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Saving Changes...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    <span>Save Configuration</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      {/* NOWPayments Gateway Diagnostics & Live Status Card */}
+      <div className="max-w-2xl bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-7 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-600">
+              <Coins className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 font-mono uppercase tracking-wider">
+                NOWPayments Automated Custody Gateway
+              </h2>
+              <p className="text-[11px] text-slate-500 font-mono">
+                Real-time connection test for automatic USDT disbursements
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleTestNowpayments}
+            disabled={testingNp}
+            className="btn-futuristic flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-mono font-bold cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${testingNp ? "animate-spin" : ""}`} />
+            <span>{testingNp ? "Testing API..." : "Test Connection"}</span>
+          </button>
+        </div>
+
+        {npResult ? (
+          <div className="space-y-4">
+            <div
+              className={`p-4 rounded-xl border text-xs font-mono flex items-start gap-3 ${
+                npResult.connected
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                  : npResult.mode === "SIMULATION"
+                  ? "bg-amber-50 border-amber-200 text-amber-800"
+                  : "bg-red-50 border-red-200 text-red-800"
+              }`}
             >
-              {saving ? (
+              {npResult.connected ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+              )}
+              <div className="space-y-1">
+                <div className="font-bold uppercase tracking-wider text-[11px]">
+                  Status: {npResult.mode || "DISCONNECTED"}
+                </div>
+                <p className="leading-relaxed">{npResult.message}</p>
+              </div>
+            </div>
+
+            {/* Credential Status Checklist */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-xs font-mono">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <span className="text-slate-600 font-semibold">API Key</span>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    npResult.configStatus?.hasApiKey
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {npResult.configStatus?.hasApiKey ? "CONFIGURED" : "MISSING"}
+                </span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <span className="text-slate-600 font-semibold">Account Login (JWT)</span>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    npResult.checks?.auth
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {npResult.checks?.auth ? "VERIFIED" : "NOT LOGGED IN"}
+                </span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <span className="text-slate-600 font-semibold">Automated 2FA TOTP</span>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    npResult.checks?.twoFa
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {npResult.checks?.twoFa ? "ENABLED" : "NOT SET"}
+                </span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <span className="text-slate-600 font-semibold">Webhook IPN Secret</span>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    npResult.configStatus?.hasIpnSecret
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {npResult.configStatus?.hasIpnSecret ? "CONFIGURED" : "OPTIONAL"}
+                </span>
+              </div>
+            </div>
+
+            {/* Custody Balances */}
+            {npResult.checks?.balances && (
+              <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-xs font-mono space-y-2">
+                <div className="font-bold text-blue-900 flex items-center justify-between">
+                  <span>NOWPayments Custody Balance:</span>
+                  <span className="text-sm text-emerald-700">
+                    {npResult.checks.balances.usdtmatic?.amount ?? 0} USDT (Polygon)
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  This balance is automatically deducted when users withdraw.
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 font-mono flex items-center justify-between">
+            <span>Click &quot;Test Connection&quot; to check your NOWPayments custody integration.</span>
+          </div>
+        )}
+      </div>
+
+      {/* Direct Custody Top-Up Tool */}
+      <div className="max-w-2xl bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-7 space-y-5">
+        <div className="flex items-center gap-2.5 pb-4 border-b border-slate-100">
+          <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600">
+            <ArrowDownToLine className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 font-mono uppercase tracking-wider">
+              Top Up Custody Reserve
+            </h2>
+            <p className="text-[11px] text-slate-500 font-mono">
+              Deposit USDT (Polygon network) to fund automatic user withdrawals
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3 items-end">
+            <div className="space-y-1.5 flex-1 w-full">
+              <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
+                Deposit Amount ($ USD)
+              </label>
+              <input
+                type="number"
+                min="5"
+                step="5"
+                value={topupAmount}
+                onChange={(e) => setTopupAmount(e.target.value)}
+                placeholder="e.g. 10 or 50"
+                className="w-full rounded-xl futuristic-input px-3.5 py-2.5 text-xs text-slate-900 font-mono"
+              />
+            </div>
+
+            <button
+              onClick={handleGenerateDeposit}
+              disabled={generatingDeposit}
+              className="btn-futuristic px-5 py-2.5 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 w-full sm:w-auto"
+            >
+              {generatingDeposit ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Saving Changes...</span>
+                  <span>Generating...</span>
                 </>
               ) : (
                 <>
-                  <Save className="h-4 w-4" />
-                  <span>Save Configuration</span>
+                  <Coins className="h-4 w-4" />
+                  <span>Generate Deposit Address</span>
                 </>
               )}
             </button>
-          </form>
-        )}
+          </div>
+
+          {depositData && (
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between text-xs font-mono font-bold text-emerald-900">
+                <span>Polygon Deposit Address Generated:</span>
+                <span className="text-[11px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded border border-emerald-300">
+                  {depositData.network}
+                </span>
+              </div>
+
+              <div className="p-3 bg-white rounded-xl border border-emerald-200 font-mono text-xs text-slate-900 flex items-center justify-between gap-2">
+                <span className="truncate select-all font-bold text-slate-800">
+                  {depositData.depositAddress}
+                </span>
+                <button
+                  onClick={copyDepositAddress}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold cursor-pointer transition-colors shrink-0"
+                >
+                  {copiedAddr ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex justify-between items-center text-xs font-mono text-emerald-800">
+                <span>Exact Amount to Send:</span>
+                <span className="font-black text-sm text-emerald-900">
+                  {depositData.amountToPay} USDT
+                </span>
+              </div>
+
+              <p className="text-[11px] text-slate-600 font-mono leading-relaxed">
+                Send exactly {depositData.amountToPay} USDT on the Polygon network from any wallet (MetaMask, TrustWallet, Binance, etc.). Once confirmed on the blockchain, NOWPayments will automatically credit your Custody balance.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

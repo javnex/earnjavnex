@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyNowpaymentsIpnSignature } from "@/lib/nowpayments";
+import { sendWithdrawalCompletedEmail } from "@/lib/email";
 
 // POST /api/webhooks/nowpayments
 export async function POST(req: Request) {
@@ -53,6 +54,21 @@ export async function POST(req: Request) {
           txHash: hash || withdrawal.txHash,
         },
       });
+
+      // Send on-chain confirmation email to user
+      if (withdrawal.user?.email) {
+        sendWithdrawalCompletedEmail({
+          toEmail: withdrawal.user.email,
+          userName: withdrawal.user.name || "User",
+          withdrawalId: withdrawal.id,
+          amountInr: withdrawal.amountInr,
+          bufferedInr: withdrawal.bufferedInr,
+          usdtAmount: withdrawal.usdtAmount,
+          network: withdrawal.network,
+          walletAddress: withdrawal.walletAddress,
+          txHash: hash || withdrawal.txHash,
+        }).catch((err) => console.error("Webhook completed email dispatch error:", err));
+      }
     } else if (
       normalizedStatus === "FAILED" ||
       normalizedStatus === "REJECTED" ||

@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import authOptions, { isAdminEmail } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getSupabaseAdmin } from "@/lib/supabase";
+import {
+  extractTaskTargetRating,
+  extractTaskDailyLimit,
+  cleanTaskInstructions,
+  formatTaskInstructions,
+  getAssignedStarRating,
+} from "@/lib/rating-balancer";
+import { generateAiReviewText } from "@/lib/review-generator";
 import { z } from "zod";
 
 const createTaskSchema = z.object({
@@ -10,6 +19,8 @@ const createTaskSchema = z.object({
   instructions: z.string().min(5, "Instructions must be provided"),
   rewardInr: z.number().positive().default(10),
   maxLimit: z.number().int().positive("Max limit must be at least 1"),
+  targetRating: z.number().min(3.0).max(5.0).default(4.5).optional(),
+  dailyLimit: z.number().int().min(1).max(20).default(2).optional(),
 });
 
 // GET /api/tasks
@@ -22,6 +33,102 @@ export async function GET(req: Request) {
     const userRole = (session?.user as any)?.role;
     const userId = (session?.user as any)?.id;
     const userEmail = (session?.user as any)?.email;
+
+    // 1. Try fast HTTPS query via Supabase (Port 443 - resilient against campus firewalls)
+    try {
+      const supabase = getSupabaseAdmin();
+
+      // Query today's approved submissions count for velocity rate limiting
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const { data: todaySubs } = await supabase
+        .from("Submission")
+        .select("taskId")
+        .gte("createdAt", todayStart.toISOString())
+        .eq("status", "APPROVED");
+
+      const todayCounts: Record<string, number> = {};
+      todaySubs?.forEach((s: any) => {
+        todayCounts[s.taskId] = (todayCounts[s.taskId] || 0) + 1;
+      });
+
+      if (showAll && userRole === "ADMIN" && isAdminEmail(userEmail)) {
+        const { data: allTasks } = await supabase
+          .from("Task")
+          .select("*")
+          .order("createdAt", { ascending: false });
+        if (allTasks) {
+          const withRating = allTasks.map((t: any) => ({
+            ...t,
+            targetRating: extractTaskTargetRating(t),
+            dailyLimit: extractTaskDailyLimit(t),
+            todayCompletedCount: todayCounts[t.id] || 0,
+          }));
+          return NextResponse.json({ tasks: withRating });
+        }
+      } else {
+        const { data: activeTasks } = await supabase
+          .from("Task")
+          .select("*")
+          .eq("status", "ACTIVE")
+          .order("createdAt", { ascending: false });
+
+        if (activeTasks) {
+          const userSubmittedTaskIds: string[] = [];
+          if (userId) {
+            const { data: userSubs } = await supabase
+              .from("Submission")
+              .select("taskId")
+              .eq("userId", userId);
+            userSubs?.forEach((s: any) => userSubmittedTaskIds.push(s.taskId));
+          }
+          const filtered = await Promise.all(
+            activeTasks
+              .filter((t: any) => {
+                // Must not be completed overall
+                if (t.completedCount >= t.maxLimit) return false;
+                // User must not have submitted for this shop
+                if (userSubmittedTaskIds.includes(t.id)) return false;
+
+                // Natural Velocity Pacing: Filter out if today's organic daily limit is reached!
+                const dailyLimit = extractTaskDailyLimit(t);
+                const todayDone = todayCounts[t.id] || 0;
+                if (todayDone >= dailyLimit) return false;
+
+                return true;
+              })
+              .map(async (t: any) => {
+                const targetRating = extractTaskTargetRating(t);
+                const dailyLimit = extractTaskDailyLimit(t);
+                const todayDone = todayCounts[t.id] || 0;
+                const { rating: assignedStars } = getAssignedStarRating({
+                  taskId: t.id,
+                  userId: userId || "guest",
+                  totalReviews: t.maxLimit,
+                  targetRating,
+                });
+                const assignedReview = await generateAiReviewText(
+                  t.title,
+                  userId || "guest",
+                  assignedStars
+                );
+                return {
+                  ...t,
+                  instructions: cleanTaskInstructions(t.instructions),
+                  targetRating,
+                  dailyLimit,
+                  todayCompletedCount: todayDone,
+                  assignedStars,
+                  assignedReview,
+                };
+              })
+          );
+          return NextResponse.json({ tasks: filtered });
+        }
+      }
+    } catch (supaErr) {
+      console.warn("Supabase tasks fallback to prisma:", supaErr);
+    }
 
     if (showAll && userRole === "ADMIN" && isAdminEmail(userEmail)) {
       // Admin view of all tasks
@@ -89,13 +196,46 @@ export async function POST(req: Request) {
       );
     }
 
-    const { title, shopUrl, instructions, rewardInr, maxLimit } = parsed.data;
+    const { title, shopUrl, instructions, rewardInr, maxLimit, targetRating, dailyLimit } = parsed.data;
+    const finalRating = targetRating ?? 4.5;
+    const finalDailyLimit = dailyLimit ?? 2;
+    const formattedInstructions = formatTaskInstructions(instructions, finalRating, finalDailyLimit);
+
+    try {
+      const supabase = getSupabaseAdmin();
+      const taskId = `task_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 9)}`;
+      const { data: supaTask, error: tErr } = await supabase
+        .from("Task")
+        .insert({
+          id: taskId,
+          title,
+          shopUrl,
+          instructions: formattedInstructions,
+          rewardInr,
+          maxLimit,
+          completedCount: 0,
+          status: "ACTIVE",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (!tErr && supaTask) {
+        return NextResponse.json(
+          { task: { ...supaTask, targetRating: finalRating, dailyLimit: finalDailyLimit } },
+          { status: 201 }
+        );
+      }
+    } catch (supaErr) {
+      console.warn("Supabase create task fallback to prisma:", supaErr);
+    }
 
     const task = await prisma.task.create({
       data: {
         title,
         shopUrl,
-        instructions,
+        instructions: formattedInstructions,
         rewardInr,
         maxLimit,
         completedCount: 0,
@@ -103,7 +243,10 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ task }, { status: 201 });
+    return NextResponse.json(
+      { task: { ...task, targetRating: finalRating, dailyLimit: finalDailyLimit } },
+      { status: 201 }
+    );
   } catch (error: any) {
     console.error("POST /api/tasks error:", error);
     return NextResponse.json(

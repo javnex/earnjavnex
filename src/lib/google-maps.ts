@@ -11,17 +11,20 @@ export function findChromePath(): string | null {
   if (process.env.CHROME_PATH && fs.existsSync(process.env.CHROME_PATH)) {
     return process.env.CHROME_PATH;
   }
+  const localAppData = process.env.LOCALAPPDATA || "";
   const candidates = [
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    `${localAppData}\\Google\\Chrome\\Application\\chrome.exe`,
     "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
     "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    `${localAppData}\\Microsoft\\Edge\\Application\\msedge.exe`,
     "/usr/bin/google-chrome",
     "/usr/bin/chromium",
     "/usr/bin/chromium-browser",
   ];
   for (const c of candidates) {
-    if (fs.existsSync(/*turbopackIgnore: true*/ c)) return c;
+    if (c && fs.existsSync(/*turbopackIgnore: true*/ c)) return c;
   }
   return null;
 }
@@ -69,7 +72,7 @@ export async function resolveGoogleMapsUrl(url: string): Promise<string> {
 
   try {
     const { stdout } = await execAsync(`curl.exe -s -I "${trimmed}"`, {
-      timeout: 6000,
+      timeout: 8000,
     });
     const match = stdout.match(/location:\s*([^\r\n]+)/i);
     if (match && match[1]) {
@@ -85,7 +88,7 @@ export async function resolveGoogleMapsUrl(url: string): Promise<string> {
 /**
  * Scrapes live Google Maps review DOM using headless Chromium.
  * Extracts:
- * - Reviewer Name (<button class="...fontTitleSmall... P9Vtnb">Name</button>)
+ * - Reviewer Name (<button class="...fontTitleSmall... P9Vtnb">Name</button> or alt="Photo of Name")
  * - Review Text (<span class="wiI7pd">Review text</span>)
  * - Shop Name (<div class="daF0l">Shop Name</div>)
  */
@@ -94,6 +97,7 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
   shopName?: string;
   reviewerName?: string;
   reviewText?: string;
+  starRating?: number;
   error?: string;
 }> {
   const chromePath = findChromePath();
@@ -102,31 +106,58 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
   }
 
   try {
-    const cmd = `"${chromePath}" --headless=new --disable-gpu --virtual-time-budget=6000 --dump-dom "${reviewUrl}"`;
+    // Resolve shortlink first so headless Chrome loads target review DOM directly
+    const targetUrl = await resolveGoogleMapsUrl(reviewUrl);
+
+    const cmd = `"${chromePath}" --headless=new --disable-gpu --virtual-time-budget=8000 --dump-dom "${targetUrl}"`;
     const { stdout } = await execAsync(cmd, {
-      maxBuffer: 20 * 1024 * 1024,
-      timeout: 12000,
+      maxBuffer: 25 * 1024 * 1024,
+      timeout: 18000,
     });
 
-    // 1. Extract Shop Name: <div class="daF0l">...</div>
-    const shopMatch = stdout.match(/<div class="daF0l">([^<]+)<\/div>/);
+    // 1. Extract Shop Name: <div class="daF0l">...</div> or <h1 class="...DUwDvf...">...</h1>
+    let shopMatch = stdout.match(/<div class="daF0l">([^<]+)<\/div>/);
+    if (!shopMatch) {
+      shopMatch = stdout.match(/<h1 class="[^"]*DUwDvf[^"]*"[^>]*>([^<]+)<\/h1>/);
+    }
     const shopName = shopMatch ? shopMatch[1].trim() : undefined;
 
-    // 2. Extract Reviewer Name: <button class="...P9Vtnb...|fontTitleSmall">...</button>
-    const reviewerMatch = stdout.match(
+    // 2. Extract Reviewer Name: <button class="...P9Vtnb...|fontTitleSmall">...</button> or alt="Photo of ..."
+    let reviewerMatch = stdout.match(
       /<button class="[^"]*(?:P9Vtnb|fontTitleSmall)[^"]*"[^>]*>([^<]+)<\/button>/
     );
+    if (!reviewerMatch) {
+      reviewerMatch = stdout.match(/alt="Photo of ([^"]+)"/);
+    }
+    if (!reviewerMatch) {
+      reviewerMatch = stdout.match(/aria-label="Photo of ([^"]+)"/);
+    }
     const reviewerName = reviewerMatch ? reviewerMatch[1].trim() : undefined;
 
-    // 3. Extract Review Text: <span class="wiI7pd">...</span>
-    const textMatch = stdout.match(/<span class="wiI7pd">([^<]+)<\/span>/);
+    // 3. Extract Review Text: <span class="wiI7pd">...</span> or <div class="MyEned"...><span...>...</span>
+    let textMatch = stdout.match(/<span class="wiI7pd">([^<]+)<\/span>/);
+    if (!textMatch) {
+      textMatch = stdout.match(/class="MyEned"[^>]*><span[^>]*>([^<]+)<\/span>/);
+    }
     const reviewText = textMatch ? textMatch[1].trim() : undefined;
 
+    // 4. Extract Star Rating: <span class="kvMYJc" role="img" aria-label="X stars">
+    let starRating: number | undefined = undefined;
+    const starMatch =
+      stdout.match(/<span class="kvMYJc"[^>]*aria-label="([1-5])\s*stars?"/i) ||
+      stdout.match(/role="img"[^>]*aria-label="([1-5])\s*stars?"/i) ||
+      stdout.match(/aria-label="(?:Rated\s*)?([1-5])\s*(?:stars?|\/5)/i);
+
+    if (starMatch && starMatch[1]) {
+      starRating = parseInt(starMatch[1], 10);
+    }
+
     return {
-      success: Boolean(reviewerName || shopName || reviewText),
+      success: Boolean(reviewerName || shopName || reviewText || starRating),
       shopName,
       reviewerName,
       reviewText,
+      starRating,
     };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -150,14 +181,88 @@ export function isReviewerNameMatch(expectedName: string, actualName: string): b
     if (expParts[0] === actParts[0]) return true;
   }
 
+  // Email prefix matching (e.g. "jayraj.0.thakur@gmail.com" vs "Jayraj Thakur")
+  if (expectedName.includes("@")) {
+    const emailPrefix = expectedName.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (act.includes(emailPrefix) || emailPrefix.includes(act)) return true;
+    if (actParts.some((part) => part.length >= 3 && emailPrefix.includes(part))) return true;
+  }
+
   return false;
 }
 
 /**
- * Verifies if review text on Google Maps matches the assigned AI review.
+ * Extracts human-readable shop name from Google Maps URL if present.
+ * e.g. /place/Aura+thai+family+spa/ -> "Aura thai family spa"
  */
-export function isReviewTextMatch(expectedText?: string, actualText?: string): boolean {
-  if (!expectedText || !actualText) return true;
+export function extractShopNameFromUrl(url: string): string | null {
+  if (!url) return null;
+  const match = url.match(/\/place\/([^/@?]+)/);
+  if (match && match[1]) {
+    try {
+      return decodeURIComponent(match[1].replace(/\+/g, " ")).trim();
+    } catch {
+      return match[1].replace(/\+/g, " ").trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * Strictly verifies that the review is for the target shop.
+ */
+export function isShopNameMatch(
+  taskTitle: string,
+  taskShopUrl: string,
+  scrapedShopName?: string
+): boolean {
+  if (!scrapedShopName || !scrapedShopName.trim()) {
+    return true; // fallback to CID check if shop name header was not in DOM
+  }
+
+  const normScraped = scrapedShopName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normTitle = taskTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const urlShopName = extractShopNameFromUrl(taskShopUrl);
+  const normUrlName = urlShopName
+    ? urlShopName.toLowerCase().replace(/[^a-z0-9]/g, "")
+    : "";
+
+  if (
+    normScraped === normTitle ||
+    normScraped.includes(normTitle) ||
+    normTitle.includes(normScraped)
+  ) {
+    return true;
+  }
+
+  if (
+    normUrlName &&
+    (normScraped === normUrlName ||
+      normScraped.includes(normUrlName) ||
+      normUrlName.includes(normScraped))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Strictly verifies that review text on Google Maps matches the assigned AI review text.
+ * Requires exact match, legitimate Google Maps prefix truncation, or >= 75% keyword overlap.
+ * Prevents users from writing arbitrary, unassigned reviews.
+ */
+export function isReviewTextMatch(
+  expectedText?: string,
+  actualText?: string
+): { matches: boolean; reason?: string; score: number } {
+  if (!expectedText || !expectedText.trim()) {
+    return { matches: false, reason: "No assigned review text provided.", score: 0 };
+  }
+  if (!actualText || !actualText.trim()) {
+    return { matches: false, reason: "No review text found on Google Maps.", score: 0 };
+  }
+
   const normExp = expectedText
     .toLowerCase()
     .replace(/[^a-z0-9]/g, " ")
@@ -169,17 +274,35 @@ export function isReviewTextMatch(expectedText?: string, actualText?: string): b
     .replace(/\s+/g, " ")
     .trim();
 
+  // 1. Exact match or direct containment
   if (normExp === normAct || normAct.includes(normExp) || normExp.includes(normAct)) {
-    return true;
+    return { matches: true, score: 1.0 };
   }
 
-  // Overlap ratio check
-  const expWords = normExp.split(" ").filter((w) => w.length > 3);
-  if (expWords.length === 0) return true;
+  // 2. Google Maps public truncation check (when Google truncates long review with ...More)
+  const actPrefix = normAct.slice(0, Math.min(normAct.length, 100));
+  if (actPrefix.length >= 25 && normExp.startsWith(actPrefix)) {
+    return { matches: true, score: 1.0 };
+  }
+
+  // 3. Strict Keyword Overlap (requires >= 70% of assigned significant words)
+  const expWords = normExp.split(" ").filter((w) => w.length >= 2);
+  if (expWords.length === 0) {
+    return { matches: normExp === normAct, reason: "Assigned text too short to verify.", score: normExp === normAct ? 1.0 : 0 };
+  }
+
   const matchCount = expWords.filter((w) => normAct.includes(w)).length;
   const overlapRatio = matchCount / expWords.length;
 
-  return overlapRatio >= 0.35;
+  if (overlapRatio >= 0.70) {
+    return { matches: true, score: Number(overlapRatio.toFixed(2)) };
+  }
+
+  return {
+    matches: false,
+    score: Number(overlapRatio.toFixed(2)),
+    reason: `Review text mismatch (similarity score: ${Math.round(overlapRatio * 100)}%). Expected assigned text was not found on Google Maps.`,
+  };
 }
 
 /**

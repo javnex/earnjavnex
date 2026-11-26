@@ -2,7 +2,11 @@
 
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import { generateAiReviewText } from "@/lib/review-generator";
+import { generateFallbackReviewText } from "@/lib/review-generator";
+import {
+  getAssignedStarRating,
+  extractTaskTargetRating,
+} from "@/lib/rating-balancer";
 import {
   ListTodo,
   ExternalLink,
@@ -16,6 +20,10 @@ import {
   Copy,
   ShieldAlert,
   UserCheck,
+  Star,
+  AlertTriangle,
+  X,
+  Zap,
 } from "lucide-react";
 
 interface Task {
@@ -27,6 +35,9 @@ interface Task {
   maxLimit: number;
   completedCount: number;
   status: string;
+  targetRating?: number;
+  assignedStars?: 3 | 4 | 5;
+  assignedReview?: string;
 }
 
 export default function TasksPage() {
@@ -39,6 +50,15 @@ export default function TasksPage() {
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
+  } | null>(null);
+
+  const [errorModal, setErrorModal] = useState<{
+    isOpen: boolean;
+    errorText: string;
+    taskTitle: string;
+    assignedStars?: number;
+    assignedReviewText?: string;
+    shopUrl?: string;
   } | null>(null);
 
   const reviewerName =
@@ -76,21 +96,14 @@ export default function TasksPage() {
     setProofInputs((prev) => ({ ...prev, [taskId]: val }));
   };
 
-  const handleSubmitProof = async (taskId: string, assignedReviewText?: string) => {
-    const proofLink = (proofInputs[taskId] || "").trim();
+  const handleSubmitProof = async (
+    taskId: string,
+    assignedReviewText?: string,
+    assignedStars?: number
+  ) => {
+    const proofLink = proofInputs[taskId]?.trim();
     if (!proofLink) {
-      setMessage({
-        type: "error",
-        text: "Please paste your review link before submitting.",
-      });
-      return;
-    }
-
-    if (!proofLink.startsWith("http://") && !proofLink.startsWith("https://")) {
-      setMessage({
-        type: "error",
-        text: "Please enter a valid URL starting with https:// or http://",
-      });
+      setMessage({ type: "error", text: "Please paste your public Google review link." });
       return;
     }
 
@@ -106,13 +119,14 @@ export default function TasksPage() {
           proofLink,
           assignedReviewText,
           reviewerName,
+          assignedStars,
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Failed to submit review");
+        throw new Error(data.error || "Submission failed");
       }
 
       setMessage({
@@ -131,10 +145,24 @@ export default function TasksPage() {
         update({ walletBalance: data.newBalance });
       }
     } catch (err: any) {
+      const errorMsg = err.message || "Submission failed";
       setMessage({
         type: "error",
-        text: err.message || "Submission failed",
+        text: errorMsg,
       });
+      const currentTask = tasks.find((t) => t.id === taskId);
+      setErrorModal((prev) =>
+        prev?.isOpen
+          ? prev
+          : {
+              isOpen: true,
+              errorText: errorMsg,
+              taskTitle: currentTask?.title || "Review Task",
+              assignedStars: assignedStars || currentTask?.assignedStars,
+              assignedReviewText: assignedReviewText || currentTask?.assignedReview,
+              shopUrl: currentTask?.shopUrl,
+            }
+      );
     } finally {
       setSubmittingTaskId(null);
     }
@@ -143,19 +171,19 @@ export default function TasksPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
-            <ListTodo className="h-6 w-6 text-emerald-400" />
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2.5">
+            <ListTodo className="h-6 w-6 text-blue-600" />
             <span>Available Review Tasks</span>
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Complete genuine reviews, submit your review public link, and earn ₹10 instantly in your web wallet.
+          <p className="text-xs text-slate-500 mt-1">
+            Complete assigned Google Maps reviews, paste your proof link, and earn ₹10 instantly in your web wallet.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-semibold text-emerald-300">
-            {tasks.length} Available Task{tasks.length !== 1 ? "s" : ""}
+          <span className="rounded-full border border-blue-200 bg-blue-50 px-3.5 py-1 text-xs font-mono font-bold text-blue-700 shadow-xs">
+            {tasks.length} Task{tasks.length !== 1 ? "s" : ""} Available
           </span>
         </div>
       </div>
@@ -163,190 +191,482 @@ export default function TasksPage() {
       {/* Alert Banner */}
       {message && (
         <div
-          className={`flex items-start gap-3 rounded-xl p-4 text-sm font-medium border ${
+          className={`flex items-start gap-3 rounded-2xl p-4 text-xs font-medium border shadow-xs ${
             message.type === "success"
-              ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
-              : "bg-rose-950/60 border-rose-500/40 text-rose-300"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+              : "bg-rose-50 border-rose-200 text-rose-800"
           }`}
         >
           {message.type === "success" ? (
-            <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
           ) : (
-            <AlertCircle className="h-5 w-5 text-rose-400 shrink-0 mt-0.5" />
+            <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
           )}
           <span className="flex-1">{message.text}</span>
           <button
             onClick={() => setMessage(null)}
-            className="text-xs hover:underline text-slate-400"
+            className="text-xs hover:underline text-slate-500 hover:text-slate-900 cursor-pointer"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* Strict 1-review Rule Notice */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-xs text-slate-400 flex items-start gap-2.5">
-        <ShieldAlert className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-        <span>
-          <strong className="text-slate-200">Strict 1 ID = 1 Submission Rule:</strong>{" "}
-          Each Google account can only submit 1 review per shop. Once submitted, that shop disappears from your available list. Tasks auto-close for all users when the shop's review limit is reached.
-        </span>
+      {/* Google Anti-Spam & Stealth Pacing Advisory Banner */}
+      <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50/90 via-indigo-50/50 to-blue-50/90 p-4 sm:p-5 text-xs text-slate-700 space-y-3 shadow-xs">
+        <div className="flex items-center gap-2 font-black text-blue-950 uppercase tracking-wide">
+          <ShieldAlert className="h-4 w-4 text-blue-600 shrink-0" />
+          <span>Google Maps Anti-Spam & Natural Pacing Active</span>
+        </div>
+        <p className="text-[11px] text-slate-600 leading-relaxed font-sans">
+          To protect client listings (50–200 existing reviews) from Google spam filters, this terminal enforces natural organic growth standards:
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px] text-slate-700">
+          <div className="flex items-start gap-2 bg-white/80 p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+            <span className="text-emerald-600 font-bold shrink-0">✓</span>
+            <span><strong>Natural Velocity Drip:</strong> Listings capped at 2–3 reviews/day to prevent sudden burst anomalies.</span>
+          </div>
+          <div className="flex items-start gap-2 bg-white/80 p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+            <span className="text-emerald-600 font-bold shrink-0">✓</span>
+            <span><strong>Organic Search Discovery:</strong> Use &ldquo;Search on Maps&rdquo; so Google detects natural search navigation.</span>
+          </div>
+          <div className="flex items-start gap-2 bg-white/80 p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+            <span className="text-emerald-600 font-bold shrink-0">✓</span>
+            <span><strong>Personal Mobile Data (4G/5G):</strong> Post on your own cellular network, not public shared Wi-Fi.</span>
+          </div>
+          <div className="flex items-start gap-2 bg-white/80 p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+            <span className="text-emerald-600 font-bold shrink-0">✓</span>
+            <span><strong>10-Min Pacing Cooldown:</strong> Enforced between tasks to de-synchronize review ring algorithms.</span>
+          </div>
+        </div>
       </div>
 
       {/* Tasks List */}
       {loading ? (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-12 text-center text-slate-400 animate-pulse">
-          Loading tasks...
+        <div className="glare-card rounded-2xl p-12 text-center text-slate-400 font-mono text-xs animate-pulse bg-white border border-slate-200">
+          Loading active review listings...
         </div>
       ) : tasks.length === 0 ? (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-12 text-center space-y-3">
-          <Sparkles className="h-10 w-10 text-emerald-400/60 mx-auto" />
-          <h2 className="text-lg font-bold text-white">No Tasks Available Right Now</h2>
-          <p className="text-sm text-slate-400 max-w-md mx-auto">
-            You have completed all active shop reviews, or active shops have reached their maximum review quota. Check back shortly for new shops!
+        <div className="glare-card rounded-2xl p-12 text-center space-y-3 bg-white border border-slate-200">
+          <Sparkles className="h-8 w-8 text-blue-600 mx-auto" />
+          <h3 className="text-base font-bold text-slate-900">No Open Tasks Right Now</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            You have submitted all active listings, or quotas have been met. Check back shortly for newly listed shops!
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5">
+        <div className="space-y-4">
           {tasks.map((task) => {
+            const isSubmitting = submittingTaskId === task.id;
             const remainingSlots = Math.max(0, task.maxLimit - task.completedCount);
             const percentFilled = Math.min(
               100,
               Math.round((task.completedCount / task.maxLimit) * 100)
             );
-            const isSubmitting = submittingTaskId === task.id;
-            const assignedReview = generateAiReviewText(task.title, userSeed);
+
+            const targetRating = extractTaskTargetRating(task);
+            const assignedStars =
+              task.assignedStars ||
+              getAssignedStarRating({
+                taskId: task.id,
+                userId: userSeed,
+                totalReviews: task.maxLimit,
+                targetRating,
+              }).rating;
+            const assignedReview =
+              task.assignedReview ||
+              generateFallbackReviewText(task.title, userSeed, assignedStars);
 
             return (
               <div
                 key={task.id}
-                className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 sm:p-6 shadow-lg shadow-black/30 space-y-4 hover:border-slate-700 transition-all"
+                className="glare-card rounded-2xl p-5 sm:p-6 space-y-4 relative overflow-hidden bg-white border border-slate-200 hover:border-blue-300"
               >
                 {/* Top: Shop Name & Reward */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-bold text-white">{task.title}</h3>
+                    <h3 className="text-lg font-black tracking-tight text-slate-900">{task.title}</h3>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-slate-400">
-                        Remaining Slots:{" "}
-                        <strong className="text-emerald-300">
+                      <span className="text-xs text-slate-500">
+                        Slots:{" "}
+                        <strong className="text-slate-900 tabular-nums">
                           {remainingSlots} / {task.maxLimit}
                         </strong>
                       </span>
-                      <span className="text-slate-600">•</span>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-slate-300">•</span>
+                      <span className="text-xs text-slate-500 tabular-nums">
                         {percentFilled}% Filled
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <span className="rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 px-3 py-1.5 text-sm font-extrabold text-emerald-400 border border-emerald-500/30">
+                  <div className="flex items-center gap-2.5">
+                    <span className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-xs font-black text-emerald-700 shadow-xs tabular-nums">
                       +₹{task.rewardInr} INR
                     </span>
-                    <a
-                      href={task.shopUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 px-3.5 py-1.5 text-xs font-semibold text-slate-200 border border-slate-700 transition-colors"
-                    >
-                      <span>Open Shop Link</span>
-                      <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
-                    </a>
                   </div>
                 </div>
 
                 {/* Slots Progress Bar */}
-                <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                <div className="h-1.5 w-full rounded-full bg-slate-100 border border-slate-200 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full"
+                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all"
                     style={{ width: `${percentFilled}%` }}
                   />
                 </div>
 
                 {/* Reviewer Account Identity Banner */}
-                <div className="flex items-center gap-2.5 rounded-xl bg-slate-950/80 border border-slate-800 p-3 text-xs">
-                  <UserCheck className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <span className="text-slate-300">
+                <div className="flex items-center gap-2.5 rounded-xl bg-blue-50/60 border border-blue-100 p-3 text-xs">
+                  <UserCheck className="h-4 w-4 text-blue-600 shrink-0" />
+                  <span className="text-slate-700">
                     Post Under Your Google Account:{" "}
-                    <strong className="text-white font-bold">{reviewerName}</strong>
+                    <strong className="text-slate-900 font-bold">{reviewerName}</strong>
                   </span>
-                  <span className="ml-auto hidden sm:inline-block text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+                  <span className="ml-auto hidden sm:inline-block text-[10px] text-blue-700 font-bold bg-white px-2.5 py-0.5 rounded-full border border-blue-200 shadow-xs">
                     Name Verified on Google Maps
                   </span>
                 </div>
 
-                {/* Assigned AI Review Box */}
-                <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-slate-950 to-emerald-950/25 p-4 space-y-2.5 shadow-inner">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-300">
-                      <Sparkles className="h-4 w-4 text-emerald-400 shrink-0" />
-                      <span>Your Assigned Review (Copy & Paste on Google Maps)</span>
+                {/* Assigned Star Rating Required Badge */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-amber-50/70 border border-amber-200 p-3.5 text-xs shadow-xs">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-amber-900 font-bold uppercase text-[11px] tracking-wider">
+                      Assigned Rating:
+                    </span>
+                    <div className="flex items-center gap-0.5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`h-4 w-4 ${
+                            i < assignedStars
+                              ? "fill-amber-400 text-amber-400 drop-shadow-xs"
+                              : "fill-transparent text-slate-300"
+                          }`}
+                        />
+                      ))}
                     </div>
+                    <span className="font-black text-amber-900 tabular-nums">
+                      ({assignedStars} Stars Required)
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-amber-800 font-medium">
+                    Must give exactly {assignedStars} stars on Google Maps
+                  </span>
+                </div>
+
+                {/* 3-Step Action Flow Box */}
+                <div className="rounded-2xl border border-blue-200/90 bg-gradient-to-b from-blue-50/50 via-slate-50/30 to-white p-4 sm:p-5 space-y-4 shadow-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-100/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-600 text-white shadow-xs">
+                        <Zap className="h-3.5 w-3.5 fill-white" />
+                      </span>
+                      <div>
+                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                          Complete Task in 3 Simple Clicks
+                        </h4>
+                        <p className="text-[11px] text-slate-500">
+                          1. Copy Review ➔ 2. Open Google Maps ➔ 3. Paste link to verify
+                        </p>
+                      </div>
+                    </div>
+                    <span className="self-start sm:self-center text-xs font-black text-emerald-700 bg-emerald-100/80 border border-emerald-200 px-3 py-1 rounded-full shadow-2xs tabular-nums">
+                      +₹{task.rewardInr} Instant Credit
+                    </span>
+                  </div>
+
+                  {/* CLICK 1: Copy Review */}
+                  <div
+                    className={`rounded-xl border p-3.5 space-y-2.5 transition-all ${
+                      copiedTaskId === task.id
+                        ? "bg-emerald-50/80 border-emerald-300 shadow-xs"
+                        : "bg-white border-slate-200"
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white transition-colors ${
+                            copiedTaskId === task.id ? "bg-emerald-600" : "bg-blue-600"
+                          }`}
+                        >
+                          {copiedTaskId === task.id ? "✓" : "1"}
+                        </span>
+                        <span className="text-xs font-bold text-slate-900">
+                          Click 1: Copy Assigned Review Text
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCopyReview(task.id, assignedReview)}
+                        className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs ${
+                          copiedTaskId === task.id
+                            ? "bg-emerald-600 text-white"
+                            : "btn-futuristic"
+                        }`}
+                      >
+                        {copiedTaskId === task.id ? (
+                          <>
+                            <Check className="h-3.5 w-3.5" />
+                            <span>Copied to Clipboard!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5" />
+                            <span>Copy Review</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs text-slate-800 font-medium leading-relaxed italic select-all shadow-inner">
+                      &ldquo;{assignedReview}&rdquo;
+                    </div>
+                  </div>
+
+                  {/* CLICK 2: Open Shop Link & Paste Review */}
+                  <div className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[11px] font-black text-white">
+                          2
+                        </span>
+                        <span className="text-xs font-bold text-slate-900">
+                          Click 2: Open Shop on Google Maps
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(task.title)}`}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          referrerPolicy="no-referrer"
+                          onClick={() => {
+                            if (navigator?.clipboard?.writeText) {
+                              navigator.clipboard.writeText(assignedReview);
+                              setCopiedTaskId(task.id);
+                            }
+                          }}
+                          className="btn-futuristic inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold text-white shadow-xs transition-all cursor-pointer"
+                          title="Search on Google Maps: Google sees a 100% natural organic search navigation!"
+                        >
+                          <span>🔍 Search on Maps (Organic)</span>
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+
+                        <a
+                          href={task.shopUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          referrerPolicy="no-referrer"
+                          onClick={() => {
+                            if (navigator?.clipboard?.writeText) {
+                              navigator.clipboard.writeText(assignedReview);
+                              setCopiedTaskId(task.id);
+                            }
+                          }}
+                          className="btn-futuristic-glass inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 hover:text-blue-600 transition-all cursor-pointer shadow-xs"
+                          title="Direct link with referrer stripped"
+                        >
+                          <span>Direct Link</span>
+                          <ExternalLink className="h-3 w-3 text-slate-400" />
+                        </a>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50 rounded-lg p-2.5 border border-slate-100">
+                      📍 <strong>Safe Organic Flow:</strong> Tap <strong>&ldquo;Search on Maps&rdquo;</strong> ➔ Select <strong>{task.title}</strong> ➔ Give <strong>{assignedStars} stars</strong> ➔ Paste the review (already copied in your clipboard) ➔ Tap <strong>Post</strong>. Then tap <strong>Share ➔ Copy link</strong>.
+                    </p>
+                  </div>
+
+                  {/* CLICK 3: Paste Review Link & Verify */}
+                  <div className="rounded-xl border border-emerald-200/90 bg-white p-3.5 space-y-2.5 shadow-2xs">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-black text-white">
+                        3
+                      </span>
+                      <span className="text-xs font-bold text-slate-900">
+                        Click 3: Paste Review Link & Verify
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                      <div className="relative flex-1">
+                        <input
+                          type="url"
+                          placeholder="Paste public review URL (https://maps.app.goo.gl/...)"
+                          value={proofInputs[task.id] || ""}
+                          onChange={(e) => handleInputChange(task.id, e.target.value)}
+                          disabled={isSubmitting}
+                          className="futuristic-input w-full rounded-xl pl-3.5 pr-16 py-2.5 text-xs text-slate-900 placeholder:text-slate-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const text = await navigator.clipboard.readText();
+                              if (text) handleInputChange(task.id, text.trim());
+                            } catch (err) {
+                              // Ignore clipboard permission errors
+                            }
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg text-[10px] font-bold text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 transition-all cursor-pointer"
+                        >
+                          Paste
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => handleSubmitProof(task.id, assignedReview, assignedStars)}
+                        disabled={isSubmitting || !proofInputs[task.id]?.trim()}
+                        className="btn-green-accent inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Verifying...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>Verify & Earn ₹10</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Admin Instructions if any */}
+                {task.instructions && (
+                  <div className="rounded-xl border border-slate-200/80 bg-white p-3 text-xs text-slate-600">
+                    <strong className="text-slate-400 uppercase tracking-wider text-[10px] block mb-1">
+                      Shop Instructions:
+                    </strong>
+                    <p className="whitespace-pre-line leading-relaxed text-slate-700">
+                      {task.instructions}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Verification Failure Popup Modal Dialog */}
+      {errorModal && errorModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl space-y-5 text-slate-900 max-h-[92vh] overflow-y-auto">
+            {/* Close X Button */}
+            <button
+              type="button"
+              onClick={() => setErrorModal(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-3 pr-8">
+              <div className="h-12 w-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0">
+                <AlertTriangle className="h-6 w-6 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Review Verification Failed</h3>
+                <p className="text-xs text-slate-500">
+                  Automated anti-cheat rejected this submission
+                </p>
+              </div>
+            </div>
+
+            {/* Rejection Reason Card */}
+            <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4 space-y-1.5">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-rose-800">
+                Rejection Reason:
+              </span>
+              <p className="text-xs font-semibold text-rose-900 leading-relaxed font-sans">
+                {errorModal.errorText}
+              </p>
+            </div>
+
+            {/* Step-by-Step Fix Instructions */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 text-xs">
+              <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px] font-mono block">
+                How to Fix & Re-Submit
+              </span>
+
+              {/* Star rating reminder if present */}
+              {errorModal.assignedStars && (
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900">
+                  <span className="font-medium text-xs font-mono">Required Star Rating:</span>
+                  <span className="font-bold font-mono bg-white px-2 py-0.5 rounded text-amber-900 flex items-center gap-1 text-xs border border-amber-200 shadow-xs">
+                    <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                    {errorModal.assignedStars} Stars Required
+                  </span>
+                </div>
+              )}
+
+              {/* Assigned review text preview with 1-click copy */}
+              {errorModal.assignedReviewText && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span className="text-[11px] font-medium font-mono">Your Assigned Review Text:</span>
                     <button
                       type="button"
-                      onClick={() => handleCopyReview(task.id, assignedReview)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold border border-emerald-500/40 transition-all cursor-pointer shadow-sm"
+                      onClick={() => handleCopyReview("modal", errorModal.assignedReviewText!)}
+                      className="text-blue-600 hover:underline flex items-center gap-1 text-[11px] font-bold cursor-pointer"
                     >
-                      {copiedTaskId === task.id ? (
+                      {copiedTaskId === "modal" ? (
                         <>
-                          <Check className="h-3.5 w-3.5 text-emerald-400" />
-                          <span>Copied!</span>
+                          <Check className="h-3 w-3 text-emerald-600" />
+                          <span className="text-emerald-700">Copied!</span>
                         </>
                       ) : (
                         <>
-                          <Copy className="h-3.5 w-3.5" />
-                          <span>Copy Review Text</span>
+                          <Copy className="h-3 w-3" />
+                          <span>Copy Text</span>
                         </>
                       )}
                     </button>
                   </div>
-                  <p className="text-xs text-slate-100 font-medium leading-relaxed bg-slate-900/90 p-3 rounded-lg border border-slate-800/80">
-                    &ldquo;{assignedReview}&rdquo;
+                  <p className="p-3 rounded-lg bg-white border border-slate-200 text-slate-800 font-sans text-xs italic leading-relaxed shadow-xs">
+                    &ldquo;{errorModal.assignedReviewText}&rdquo;
                   </p>
                 </div>
+              )}
 
-                {/* Instructions Box */}
-                <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3.5 text-xs text-slate-300 space-y-1">
-                  <strong className="text-slate-400 uppercase tracking-wider text-[10px] block">
-                    Task Steps:
-                  </strong>
-                  <p className="whitespace-pre-line leading-relaxed font-sans text-slate-300">
-                    {task.instructions}
-                  </p>
-                </div>
-
-                {/* Submit Proof Link Form */}
-                <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                  <input
-                    type="url"
-                    placeholder="Paste your public review URL here (https://maps.app.goo.gl/...)"
-                    value={proofInputs[task.id] || ""}
-                    onChange={(e) => handleInputChange(task.id, e.target.value)}
-                    disabled={isSubmitting}
-                    className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
-                  <button
-                    onClick={() => handleSubmitProof(task.id, assignedReview)}
-                    disabled={isSubmitting}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-500/20 transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Verifying...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="h-3.5 w-3.5" />
-                        <span>Submit & Earn ₹10</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+              <div className="text-[11px] text-slate-600 space-y-1 pt-2 border-t border-slate-200">
+                <p>1. Open Google Maps, tap on your review and click <strong>Edit</strong>.</p>
+                <p>2. Give exactly <strong>{errorModal.assignedStars || 5} Stars</strong> and paste the assigned review text.</p>
+                <p>3. Wait 30 seconds for Google Maps public view to refresh, then click <strong>Submit & Earn ₹10</strong> again.</p>
               </div>
-            );
-          })}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
+              {errorModal.shopUrl && (
+                <a
+                  href={errorModal.shopUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full sm:w-1/2 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors"
+                >
+                  <span>Open Google Maps</span>
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setErrorModal(null)}
+                className="btn-futuristic w-full sm:flex-1 py-2.5 rounded-xl text-xs font-bold text-white cursor-pointer shadow-md shadow-blue-500/20"
+              >
+                I Understand, Close & Fix
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

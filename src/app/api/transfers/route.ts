@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import authOptions, { isAdminEmail } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { z } from "zod";
 
 const transferSchema = z.object({
@@ -24,6 +25,33 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const all = searchParams.get("all") === "true";
 
+    try {
+      const supabase = getSupabaseAdmin();
+      if (all && userRole === "ADMIN" && isAdminEmail(userEmail)) {
+        const { data: supaTransfers, error: tErr } = await supabase
+          .from("WalletTransfer")
+          .select("*, sender:User!senderId(name, email, userCode), receiver:User!receiverId(name, email, userCode)")
+          .order("createdAt", { ascending: false })
+          .limit(100);
+
+        if (!tErr && supaTransfers) {
+          return NextResponse.json({ transfers: supaTransfers });
+        }
+      } else {
+        const { data: supaTransfers, error: tErr } = await supabase
+          .from("WalletTransfer")
+          .select("*, sender:User!senderId(name, email, userCode), receiver:User!receiverId(name, email, userCode)")
+          .or(`senderId.eq.${userId},receiverId.eq.${userId}`)
+          .order("createdAt", { ascending: false });
+
+        if (!tErr && supaTransfers) {
+          return NextResponse.json({ transfers: supaTransfers });
+        }
+      }
+    } catch (supaErr) {
+      console.warn("Supabase transfers GET fallback to prisma:", supaErr);
+    }
+
     if (all && userRole === "ADMIN" && isAdminEmail(userEmail)) {
       const transfers = await prisma.walletTransfer.findMany({
         orderBy: { createdAt: "desc" },
@@ -36,7 +64,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ transfers });
     }
 
-    // User's own sent and received transfers
     const transfers = await prisma.walletTransfer.findMany({
       where: {
         OR: [{ senderId: userId }, { receiverId: userId }],
@@ -58,7 +85,7 @@ export async function GET(req: Request) {
   }
 }
 
-// POST /api/transfers - Execute ₹0 internal wallet transfer
+// POST /api/transfers - Execute internal wallet transfer
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -87,15 +114,26 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. Lookup Recipient by Email or UserCode (case-insensitive)
-    const recipient = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { email: cleanId.toLowerCase() },
-          { userCode: cleanId.toUpperCase() },
-        ],
-      },
-    });
+    const supabase = getSupabaseAdmin();
+
+    // 1. Lookup Recipient via Supabase
+    let recipient: any = null;
+    const { data: recByEmail } = await supabase
+      .from("User")
+      .select("id, name, email, userCode, walletBalance")
+      .ilike("email", cleanId.toLowerCase())
+      .maybeSingle();
+
+    if (recByEmail) {
+      recipient = recByEmail;
+    } else {
+      const { data: recByCode } = await supabase
+        .from("User")
+        .select("id, name, email, userCode, walletBalance")
+        .ilike("userCode", cleanId.toUpperCase())
+        .maybeSingle();
+      if (recByCode) recipient = recByCode;
+    }
 
     if (!recipient) {
       return NextResponse.json(
@@ -114,59 +152,55 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3. Execute Atomic Transaction with strict balance check
-    const result = await prisma.$transaction(async (tx) => {
-      const sender = await tx.user.findUnique({
-        where: { id: senderId },
-      });
+    // 3. Check Sender Balance
+    const { data: sender } = await supabase
+      .from("User")
+      .select("id, walletBalance")
+      .eq("id", senderId)
+      .single();
 
-      if (!sender) {
-        throw new Error("Sender not found");
-      }
+    if (!sender) {
+      return NextResponse.json({ error: "Sender not found" }, { status: 404 });
+    }
 
-      if (sender.walletBalance < amount) {
-        throw new Error(
-          `Insufficient balance! You have ₹${sender.walletBalance.toFixed(
-            2
-          )}, but tried to transfer ₹${amount.toFixed(2)}.`
-        );
-      }
-
-      // Deduct from sender
-      const updatedSender = await tx.user.update({
-        where: { id: senderId },
-        data: {
-          walletBalance: { decrement: amount },
+    if (sender.walletBalance < amount) {
+      return NextResponse.json(
+        {
+          error: `Insufficient balance! You have ₹${Number(sender.walletBalance).toFixed(2)}, but tried to transfer ₹${amount.toFixed(2)}.`,
         },
-        select: { walletBalance: true },
-      });
+        { status: 400 }
+      );
+    }
 
-      // Add to receiver
-      await tx.user.update({
-        where: { id: recipient.id },
-        data: {
-          walletBalance: { increment: amount },
-        },
-      });
+    const newSenderBalance = Number((sender.walletBalance - amount).toFixed(2));
+    const newRecipientBalance = Number(((recipient.walletBalance || 0) + amount).toFixed(2));
 
-      // Create audit log
-      const transfer = await tx.walletTransfer.create({
-        data: {
-          senderId,
-          receiverId: recipient.id,
-          amountInr: amount,
-          note: note?.trim() || null,
-        },
-        include: {
-          receiver: { select: { name: true, email: true, userCode: true } },
-        },
-      });
+    // Deduct from sender
+    await supabase
+      .from("User")
+      .update({ walletBalance: newSenderBalance, updatedAt: new Date().toISOString() })
+      .eq("id", senderId);
 
-      return {
-        transfer,
-        newBalance: updatedSender.walletBalance,
-      };
-    });
+    // Add to recipient
+    await supabase
+      .from("User")
+      .update({ walletBalance: newRecipientBalance, updatedAt: new Date().toISOString() })
+      .eq("id", recipient.id);
+
+    // Create Transfer Record
+    const transferId = `tf_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 9)}`;
+    const { data: transferRecord } = await supabase
+      .from("WalletTransfer")
+      .insert({
+        id: transferId,
+        senderId,
+        receiverId: recipient.id,
+        amountInr: amount,
+        note: note?.trim() || null,
+        createdAt: new Date().toISOString(),
+      })
+      .select()
+      .single();
 
     return NextResponse.json(
       {
@@ -174,8 +208,8 @@ export async function POST(req: Request) {
         message: `Successfully transferred ₹${amount} to ${
           recipient.name || recipient.email
         } (${recipient.userCode})!`,
-        transfer: result.transfer,
-        newBalance: result.newBalance,
+        transfer: transferRecord,
+        newBalance: newSenderBalance,
       },
       { status: 201 }
     );
