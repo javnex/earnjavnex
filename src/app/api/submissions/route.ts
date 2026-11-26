@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import authOptions from "@/lib/auth";
+import authOptions, { isAdminEmail } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import {
+  verifyGoogleReviewMatch,
+  scrapeGoogleMapsLiveReview,
+  isReviewerNameMatch,
+  isReviewTextMatch,
+} from "@/lib/google-maps";
 import { z } from "zod";
 
 const submissionSchema = z.object({
@@ -13,6 +19,8 @@ const submissionSchema = z.object({
       (url) => url.startsWith("http://") || url.startsWith("https://"),
       "URL must start with http:// or https://"
     ),
+  assignedReviewText: z.string().optional(),
+  reviewerName: z.string().optional(),
 });
 
 // GET /api/submissions
@@ -25,10 +33,11 @@ export async function GET(req: Request) {
 
     const userId = (session.user as any).id;
     const userRole = (session.user as any).role;
+    const userEmail = (session.user as any).email;
     const { searchParams } = new URL(req.url);
     const statusFilter = searchParams.get("status");
 
-    if (userRole === "ADMIN") {
+    if (userRole === "ADMIN" && isAdminEmail(userEmail)) {
       // Admin sees all submissions with filters
       const where: any = {};
       if (statusFilter && ["PENDING", "APPROVED", "REJECTED"].includes(statusFilter)) {
@@ -84,7 +93,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { taskId, proofLink } = parsed.data;
+    const { taskId, proofLink, assignedReviewText, reviewerName } = parsed.data;
     const trimmedProofLink = proofLink.trim();
 
     // 1. Check Global Proof Link Uniqueness
@@ -120,7 +129,109 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3. Fetch Settings for Verification Mode
+    // 3. Verify Target Task & Check Google Maps Match
+    const targetTask = await prisma.task.findUnique({
+      where: { id: taskId },
+    });
+    if (!targetTask) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
+    if (targetTask.status !== "ACTIVE" || targetTask.completedCount >= targetTask.maxLimit) {
+      return NextResponse.json(
+        { error: "This task has reached its maximum limit and is now closed." },
+        { status: 400 }
+      );
+    }
+
+    // Advanced Anti-Cheat: Validate that proofLink is an actual review belonging to this shop
+    const validation = await verifyGoogleReviewMatch({
+      shopUrl: targetTask.shopUrl,
+      proofLink: trimmedProofLink,
+    });
+
+    if (!validation.valid) {
+      return NextResponse.json(
+        { error: validation.reason || "Invalid review proof link." },
+        { status: 400 }
+      );
+    }
+
+    // Check canonical review token uniqueness across all submissions
+    if (validation.reviewId) {
+      const duplicateReview = await prisma.submission.findFirst({
+        where: {
+          proofLink: {
+            contains: validation.reviewId,
+          },
+        },
+      });
+      if (duplicateReview) {
+        return NextResponse.json(
+          {
+            error:
+              "This specific Google review has already been submitted and claimed! You cannot reuse the same review.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 4. Live Automated Google Maps Verification
+    let autoVerifiedDetails = "";
+    const expectedReviewer =
+      reviewerName || (session.user as any)?.name || (session.user as any)?.email;
+
+    try {
+      const liveScrape = await scrapeGoogleMapsLiveReview(trimmedProofLink);
+      if (liveScrape.success) {
+        // A. Verify Reviewer Name Match
+        if (liveScrape.reviewerName) {
+          const nameMatches = isReviewerNameMatch(expectedReviewer, liveScrape.reviewerName);
+          if (!nameMatches) {
+            return NextResponse.json(
+              {
+                error: `Verification failed: Review on Google Maps was posted by "${liveScrape.reviewerName}", but your logged-in Google account is "${expectedReviewer}". You must post the review using your own Google account.`,
+              },
+              { status: 400 }
+            );
+          }
+        }
+
+        // B. Verify Shop Name Match
+        if (liveScrape.shopName) {
+          const titleNorm = targetTask.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const shopNorm = liveScrape.shopName.toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (!titleNorm.includes(shopNorm) && !shopNorm.includes(titleNorm)) {
+            return NextResponse.json(
+              {
+                error: `Verification failed: This Google review is for "${liveScrape.shopName}", not "${targetTask.title}".`,
+              },
+              { status: 400 }
+            );
+          }
+        }
+
+        // C. Verify Review Text Match
+        if (assignedReviewText && liveScrape.reviewText) {
+          const textMatches = isReviewTextMatch(assignedReviewText, liveScrape.reviewText);
+          if (!textMatches) {
+            return NextResponse.json(
+              {
+                error: `Verification failed: The review text on Google Maps does not match your assigned review text. Please copy and paste the exact assigned review text.`,
+              },
+              { status: 400 }
+            );
+          }
+        }
+
+        autoVerifiedDetails = `Auto-Verified: Reviewer="${liveScrape.reviewerName || expectedReviewer}", Shop="${liveScrape.shopName || targetTask.title}"`;
+      }
+    } catch (scrapeErr: any) {
+      console.warn("Live scraper warning:", scrapeErr.message);
+    }
+
+    // 5. Fetch Settings for Verification Mode
     const setting =
       (await prisma.setting.findUnique({ where: { id: "default" } })) || {
         verificationMode: "AUTO",
@@ -128,7 +239,7 @@ export async function POST(req: Request) {
 
     const isAutoMode = setting.verificationMode === "AUTO";
 
-    // 4. Atomic Database Transaction with auto-close logic
+    // 6. Atomic Database Transaction with auto-close logic
     const result = await prisma.$transaction(async (tx) => {
       // Re-check task limit inside transaction
       const task = await tx.task.findUnique({
@@ -149,6 +260,12 @@ export async function POST(req: Request) {
         : task.completedCount; // in manual mode count updates on admin approval
       const willClose = newCompletedCount >= task.maxLimit;
 
+      const notes = autoVerifiedDetails
+        ? `${autoVerifiedDetails}${assignedReviewText ? ` | Assigned: "${assignedReviewText}"` : ""}`
+        : `Reviewer Name: ${expectedReviewer}${
+            assignedReviewText ? ` | Assigned Review: "${assignedReviewText}"` : ""
+          }`;
+
       // Create submission
       const submission = await tx.submission.create({
         data: {
@@ -157,6 +274,7 @@ export async function POST(req: Request) {
           proofLink: trimmedProofLink,
           status: isAutoMode ? "APPROVED" : "PENDING",
           rewardCredited: rewardAmount,
+          adminNotes: notes,
         },
       });
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import authOptions from "@/lib/auth";
+import authOptions, { isAdminEmail } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
 
@@ -37,8 +37,9 @@ export async function GET() {
 export async function PATCH(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || (session.user as any)?.role !== "ADMIN") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    const email = (session?.user as any)?.email;
+    if (!session || (session.user as any)?.role !== "ADMIN" || !isAdminEmail(email)) {
+      return NextResponse.json({ error: "Forbidden: Admin access only" }, { status: 403 });
     }
 
     const body = await req.json();

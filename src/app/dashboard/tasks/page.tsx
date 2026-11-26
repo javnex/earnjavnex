@@ -2,6 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { generateAiReviewText } from "@/lib/review-generator";
 import {
   ListTodo,
   ExternalLink,
@@ -12,7 +13,9 @@ import {
   Send,
   Loader2,
   Check,
+  Copy,
   ShieldAlert,
+  UserCheck,
 } from "lucide-react";
 
 interface Task {
@@ -31,11 +34,24 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [proofInputs, setProofInputs] = useState<Record<string, string>>({});
+  const [copiedTaskId, setCopiedTaskId] = useState<string | null>(null);
   const [submittingTaskId, setSubmittingTaskId] = useState<string | null>(null);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  const reviewerName =
+    (session?.user as any)?.name ||
+    (session?.user as any)?.email?.split("@")[0] ||
+    "Your Google Account";
+  const userSeed = (session?.user as any)?.id || "user";
+
+  const handleCopyReview = (taskId: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedTaskId(taskId);
+    setTimeout(() => setCopiedTaskId(null), 2500);
+  };
 
   const fetchTasks = async () => {
     try {
@@ -60,7 +76,7 @@ export default function TasksPage() {
     setProofInputs((prev) => ({ ...prev, [taskId]: val }));
   };
 
-  const handleSubmitProof = async (taskId: string) => {
+  const handleSubmitProof = async (taskId: string, assignedReviewText?: string) => {
     const proofLink = (proofInputs[taskId] || "").trim();
     if (!proofLink) {
       setMessage({
@@ -85,7 +101,12 @@ export default function TasksPage() {
       const res = await fetch("/api/submissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId, proofLink }),
+        body: JSON.stringify({
+          taskId,
+          proofLink,
+          assignedReviewText,
+          reviewerName,
+        }),
       });
 
       const data = await res.json();
@@ -194,6 +215,7 @@ export default function TasksPage() {
               Math.round((task.completedCount / task.maxLimit) * 100)
             );
             const isSubmitting = submittingTaskId === task.id;
+            const assignedReview = generateAiReviewText(task.title, userSeed);
 
             return (
               <div
@@ -242,12 +264,54 @@ export default function TasksPage() {
                   />
                 </div>
 
+                {/* Reviewer Account Identity Banner */}
+                <div className="flex items-center gap-2.5 rounded-xl bg-slate-950/80 border border-slate-800 p-3 text-xs">
+                  <UserCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span className="text-slate-300">
+                    Post Under Your Google Account:{" "}
+                    <strong className="text-white font-bold">{reviewerName}</strong>
+                  </span>
+                  <span className="ml-auto hidden sm:inline-block text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+                    Name Verified on Google Maps
+                  </span>
+                </div>
+
+                {/* Assigned AI Review Box */}
+                <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-slate-950 to-emerald-950/25 p-4 space-y-2.5 shadow-inner">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-300">
+                      <Sparkles className="h-4 w-4 text-emerald-400 shrink-0" />
+                      <span>Your Assigned Review (Copy & Paste on Google Maps)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyReview(task.id, assignedReview)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold border border-emerald-500/40 transition-all cursor-pointer shadow-sm"
+                    >
+                      {copiedTaskId === task.id ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 text-emerald-400" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" />
+                          <span>Copy Review Text</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-100 font-medium leading-relaxed bg-slate-900/90 p-3 rounded-lg border border-slate-800/80">
+                    &ldquo;{assignedReview}&rdquo;
+                  </p>
+                </div>
+
                 {/* Instructions Box */}
                 <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3.5 text-xs text-slate-300 space-y-1">
                   <strong className="text-slate-400 uppercase tracking-wider text-[10px] block">
-                    Instructions:
+                    Task Steps:
                   </strong>
-                  <p className="whitespace-pre-line leading-relaxed font-sans">
+                  <p className="whitespace-pre-line leading-relaxed font-sans text-slate-300">
                     {task.instructions}
                   </p>
                 </div>
@@ -256,14 +320,14 @@ export default function TasksPage() {
                 <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                   <input
                     type="url"
-                    placeholder="Paste your public review URL here (https://...)"
+                    placeholder="Paste your public review URL here (https://maps.app.goo.gl/...)"
                     value={proofInputs[task.id] || ""}
                     onChange={(e) => handleInputChange(task.id, e.target.value)}
                     disabled={isSubmitting}
                     className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
                   <button
-                    onClick={() => handleSubmitProof(task.id)}
+                    onClick={() => handleSubmitProof(task.id, assignedReview)}
                     disabled={isSubmitting}
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-500/20 transition-all disabled:opacity-50 cursor-pointer"
                   >

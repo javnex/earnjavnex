@@ -11,14 +11,15 @@ export function generateUserCode(): string {
   return code;
 }
 
+/**
+ * Strict Security: ONLY javnexreview@gmail.com is permitted as ADMIN
+ */
 export function isAdminEmail(email: string): boolean {
-  const adminList = (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
   return (
-    adminList.includes(email.toLowerCase()) ||
-    email.toLowerCase() === "admin@reviewreward.local"
+    normalized === "javnexreview@gmail.com" ||
+    normalized === "javnex.review@gmail.com"
   );
 }
 
@@ -67,11 +68,15 @@ export const authOptions: NextAuthOptions = {
               walletBalance: 0.0,
             },
           });
-        } else if (isAdminEmail(email) && existingUser.role !== "ADMIN") {
-          await prisma.user.update({
-            where: { email },
-            data: { role: "ADMIN" },
-          });
+        } else {
+          // Strict Role Sync: ONLY javnexreview@gmail.com can hold ADMIN
+          const properRole = isAdminEmail(email) ? "ADMIN" : "USER";
+          if (existingUser.role !== properRole) {
+            await prisma.user.update({
+              where: { email },
+              data: { role: properRole },
+            });
+          }
         }
       }
       return true;
@@ -101,7 +106,10 @@ export const authOptions: NextAuthOptions = {
           });
           if (freshUser) {
             token.id = freshUser.id;
-            token.role = freshUser.role;
+            // Strict role guard: only authorized email can be admin
+            token.role = isAdminEmail(token.email as string)
+              ? "ADMIN"
+              : "USER";
             token.userCode = freshUser.userCode;
             token.walletBalance = freshUser.walletBalance;
           }

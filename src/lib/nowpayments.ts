@@ -97,8 +97,8 @@ export async function getNowpaymentsBalance(): Promise<{
   if (!NOWPAYMENTS_API_KEY) {
     return {
       balances: {
-        usdtmatic: { amount: 1500.0, pendingAmount: 0 },
-        matic: { amount: 25.5, pendingAmount: 0 },
+        usdtmatic: { amount: 0.0, pendingAmount: 0 },
+        matic: { amount: 0.0, pendingAmount: 0 },
       },
       raw: { simulated: true },
     };
@@ -121,7 +121,7 @@ export async function getNowpaymentsBalance(): Promise<{
     console.error("NOWPayments getBalance error:", err.message);
     return {
       balances: {
-        usdtmatic: { amount: 1250.0, pendingAmount: 0 },
+        usdtmatic: { amount: 0.0, pendingAmount: 0 },
       },
       raw: { error: err.message },
     };
@@ -286,7 +286,15 @@ export function verifyNowpaymentsIpnSignature(
   payload: Record<string, any>,
   receivedSig: string
 ): boolean {
-  if (!NOWPAYMENTS_IPN_SECRET) return true; // Bypass if secret not set
+  if (!NOWPAYMENTS_IPN_SECRET) {
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        "NOWPAYMENTS_IPN_SECRET is not configured in production. Rejecting IPN webhook for security."
+      );
+      return false;
+    }
+    return true; // Local development convenience
+  }
 
   // Sort keys alphabetically
   const sortedKeys = Object.keys(payload).sort();

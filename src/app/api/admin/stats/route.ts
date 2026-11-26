@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import authOptions from "@/lib/auth";
+import authOptions, { isAdminEmail } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getNowpaymentsBalance } from "@/lib/nowpayments";
 
@@ -8,8 +8,9 @@ import { getNowpaymentsBalance } from "@/lib/nowpayments";
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || (session.user as any)?.role !== "ADMIN") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    const email = (session?.user as any)?.email;
+    if (!session || (session.user as any)?.role !== "ADMIN" || !isAdminEmail(email)) {
+      return NextResponse.json({ error: "Forbidden: Admin access only" }, { status: 403 });
     }
 
     const [
@@ -51,7 +52,7 @@ export async function GET() {
         totalWithdrawnInr: withdrawalsAgg._sum.amountInr || 0,
         completedWithdrawalsCount: withdrawalsAgg._count.id || 0,
         nowpaymentsCustodyUsdt:
-          nowpayments.balances?.usdtmatic?.amount ?? 1250.0,
+          nowpayments.balances?.usdtmatic?.amount ?? 0.0,
       },
     });
   } catch (error: any) {

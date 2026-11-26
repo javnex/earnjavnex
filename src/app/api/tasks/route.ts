@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import authOptions from "@/lib/auth";
+import authOptions, { isAdminEmail } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
 
@@ -21,8 +21,9 @@ export async function GET(req: Request) {
 
     const userRole = (session?.user as any)?.role;
     const userId = (session?.user as any)?.id;
+    const userEmail = (session?.user as any)?.email;
 
-    if (showAll && userRole === "ADMIN") {
+    if (showAll && userRole === "ADMIN" && isAdminEmail(userEmail)) {
       // Admin view of all tasks
       const tasks = await prisma.task.findMany({
         orderBy: { createdAt: "desc" },
@@ -73,8 +74,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || (session.user as any)?.role !== "ADMIN") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    const email = (session?.user as any)?.email;
+    if (!session || (session.user as any)?.role !== "ADMIN" || !isAdminEmail(email)) {
+      return NextResponse.json({ error: "Forbidden: Admin access only" }, { status: 403 });
     }
 
     const body = await req.json();

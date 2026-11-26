@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import authOptions from "@/lib/auth";
+import authOptions, { isAdminEmail } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
 
@@ -20,10 +20,11 @@ export async function GET(req: Request) {
 
     const userId = (session.user as any).id;
     const userRole = (session.user as any).role;
+    const userEmail = (session.user as any).email;
     const { searchParams } = new URL(req.url);
     const all = searchParams.get("all") === "true";
 
-    if (all && userRole === "ADMIN") {
+    if (all && userRole === "ADMIN" && isAdminEmail(userEmail)) {
       const transfers = await prisma.walletTransfer.findMany({
         orderBy: { createdAt: "desc" },
         include: {

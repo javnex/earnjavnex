@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -12,13 +13,15 @@ function createPrismaClient(): InstanceType<typeof PrismaClient> {
     process.env.DATABASE_URL ||
     "postgresql://postgres:postgres@localhost:5432/postgres";
 
+  const isLocal =
+    connectionString.includes("localhost") ||
+    connectionString.includes("127.0.0.1");
+
   const pool =
     globalForPrisma.pool ??
     new Pool({
       connectionString,
-      ssl: connectionString.includes("supabase.co")
-        ? { rejectUnauthorized: false }
-        : undefined,
+      ssl: isLocal ? undefined : { rejectUnauthorized: false },
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,

@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth";
-import authOptions from "@/lib/auth";
+import authOptions, { isAdminEmail } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
@@ -19,8 +19,13 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const session = await getServerSession(authOptions);
+  const email = (session?.user as any)?.email;
 
-  if (!session || (session.user as any)?.role !== "ADMIN") {
+  if (
+    !session ||
+    (session.user as any)?.role !== "ADMIN" ||
+    !isAdminEmail(email)
+  ) {
     redirect("/dashboard");
   }
 

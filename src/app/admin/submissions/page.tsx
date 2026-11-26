@@ -240,6 +240,18 @@ export default function AdminSubmissionsPage() {
                       <p className="text-[10px] text-slate-500">
                         {new Date(sub.createdAt).toLocaleString()}
                       </p>
+
+                      {/* Display Expected Reviewer & Assigned AI Review */}
+                      {sub.adminNotes && (
+                        <div className="mt-1.5 rounded-lg bg-slate-950/90 border border-slate-800 p-2 text-[11px] space-y-0.5">
+                          <span className="font-bold text-emerald-400 block text-[10px] uppercase tracking-wider">
+                            Expected Google Review:
+                          </span>
+                          <p className="text-slate-300 leading-relaxed font-sans">
+                            {sub.adminNotes}
+                          </p>
+                        </div>
+                      )}
                     </td>
 
                     {/* Status */}

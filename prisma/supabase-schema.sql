@@ -97,47 +97,7 @@ CREATE TABLE IF NOT EXISTS "Setting" (
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 7. Seed Initial Settings & 3 Tasks
+-- 7. Seed Initial Production Settings Only (No dummy tasks or fake balances)
 INSERT INTO "Setting" ("id", "verificationMode", "cashoutBufferPercent", "minWithdrawalInr", "usdtInrRate", "updatedAt")
 VALUES ('default', 'AUTO', 6.0, 100.0, 90.5, CURRENT_TIMESTAMP)
-ON CONFLICT ("id") DO NOTHING;
-
-INSERT INTO "Task" ("id", "title", "shopUrl", "instructions", "rewardInr", "maxLimit", "completedCount", "status", "createdAt", "updatedAt")
-VALUES 
-(
-    'task-chai-point',
-    'Chai Point Indiranagar - Google Maps Review',
-    'https://maps.google.com/?cid=10101010101',
-    '1. Click Open Shop Link. 2. Leave a genuine 5-star review about the Masala Chai and cafe ambiance. 3. Copy public review link and paste below.',
-    10.0,
-    50,
-    12,
-    'ACTIVE',
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP
-),
-(
-    'task-organic-earth',
-    'Organic Earth Superstore - Trustpilot Feedback',
-    'https://www.trustpilot.com/review/organicearth.example',
-    '1. Visit the store review page. 2. Write a 4 or 5-star review highlighting delivery speed and organic honey quality. 3. Submit your review public URL.',
-    10.0,
-    100,
-    45,
-    'ACTIVE',
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP
-),
-(
-    'task-urban-kicks',
-    'Urban Kicks Footwear - Google Review (Filling Fast!)',
-    'https://maps.google.com/?cid=20202020202',
-    '1. Open Google Business page. 2. Post helpful review about shoe comfort and pricing. 3. Paste your review link to get ₹10 credited instantly. Auto-closes at 20!',
-    10.0,
-    20,
-    19,
-    'ACTIVE',
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP
-)
 ON CONFLICT ("id") DO NOTHING;
