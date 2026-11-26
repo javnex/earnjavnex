@@ -43,3 +43,8 @@ dev.db-journal
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# opennext & cloudflare
+.open-next
+.wrangler
+.dev.vars
