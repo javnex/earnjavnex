@@ -1,16 +1,20 @@
 "use client";
 
 import { signIn, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
-import { Sparkles, ShieldCheck, Zap, ArrowRight, CheckCircle2, Lock } from "lucide-react";
+import { Sparkles, ShieldCheck, Zap, ArrowRight, CheckCircle2, Lock, AlertCircle } from "lucide-react";
 
-export default function LoginPage() {
+function LoginContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const errorParam = searchParams.get("error");
+
   const [loading, setLoading] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
+  const [consentError, setConsentError] = useState(false);
 
   useEffect(() => {
     if (session) {
@@ -19,7 +23,11 @@ export default function LoginPage() {
   }, [session, router]);
 
   const handleGoogleLogin = async () => {
-    if (!consentGiven) return;
+    if (!consentGiven) {
+      setConsentError(true);
+      return;
+    }
+    setConsentError(false);
     setLoading(true);
     await signIn("google", { callbackUrl: "/dashboard" });
   };
@@ -59,13 +67,39 @@ export default function LoginPage() {
             </p>
           </div>
 
+          {/* Error Banner if Redirected with an OAuth Error */}
+          {errorParam && (
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-1 flex items-start gap-2.5">
+              <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <strong className="block font-bold">Authentication Notice ({errorParam})</strong>
+                <span>
+                  {errorParam === "OAuthSignin"
+                    ? "Could not initiate Google Sign-in. Please ensure Google OAuth credentials and redirect URIs are active in your Cloudflare environment."
+                    : errorParam === "OAuthCallback"
+                    ? "Error receiving response from Google. Verify the Authorized Redirect URI in Google Cloud Console."
+                    : errorParam === "AccessDenied"
+                    ? "Sign in was cancelled or access denied."
+                    : "An authentication error occurred. Please try again."}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Explicit Affirmative Consent Checkbox under India DPDP Act 2023 */}
-          <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-2">
+          <div className={`p-3.5 rounded-2xl transition-all border space-y-2 ${
+            consentError
+              ? "bg-rose-50/90 border-rose-300 ring-2 ring-rose-400/20"
+              : "bg-blue-50/70 border-blue-200"
+          }`}>
             <label className="flex items-start gap-3 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={consentGiven}
-                onChange={(e) => setConsentGiven(e.target.checked)}
+                onChange={(e) => {
+                  setConsentGiven(e.target.checked);
+                  if (e.target.checked) setConsentError(false);
+                }}
                 className="mt-0.5 h-4 w-4 rounded border-blue-300 bg-white text-blue-600 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-blue-600"
               />
               <span className="text-xs text-slate-700 font-sans leading-relaxed">
@@ -80,13 +114,18 @@ export default function LoginPage() {
                 .
               </span>
             </label>
+            {consentError && (
+              <p className="text-[11px] font-semibold text-rose-600 pt-1 flex items-center gap-1">
+                <span>⚠️ Please check this box to confirm your consent before proceeding.</span>
+              </p>
+            )}
           </div>
 
           {/* Google Sign-in Button */}
           <button
             onClick={handleGoogleLogin}
-            disabled={loading || status === "loading" || !consentGiven}
-            className="btn-futuristic w-full flex items-center justify-center gap-3 rounded-2xl px-5 py-3.5 text-xs font-bold text-white shadow-lg shadow-blue-500/25 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={loading || status === "loading"}
+            className="btn-futuristic w-full flex items-center justify-center gap-3 rounded-2xl px-5 py-3.5 text-xs font-bold text-white shadow-lg shadow-blue-500/25 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24">
               <path
@@ -108,12 +147,6 @@ export default function LoginPage() {
             </svg>
             <span>{loading ? "Connecting to Google..." : "Continue with Google"}</span>
           </button>
-
-          {!consentGiven && (
-            <p className="text-[11px] text-blue-700 font-mono text-center">
-              Please check the affirmative consent box above to proceed.
-            </p>
-          )}
 
           {/* Key platform perks */}
           <div className="pt-4 border-t border-slate-100 space-y-2.5 text-xs text-slate-700">
@@ -150,5 +183,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center text-xs font-mono text-slate-400">Loading...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }
