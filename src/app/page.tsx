@@ -36,7 +36,7 @@ export default function HomePage() {
     provider: {
       "@type": "Organization",
       name: "ReviewReward",
-      url: "https://reviewreward.in",
+      url: "https://earn.javnex.in",
     },
   };
 

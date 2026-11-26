@@ -1,7 +1,7 @@
 import { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXTAUTH_URL || "https://reviewreward.in";
+  const baseUrl = process.env.NEXTAUTH_URL || "https://earn.javnex.in";
   const now = new Date();
 
   return [

@@ -9,7 +9,7 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-const siteUrl = process.env.NEXTAUTH_URL || "https://reviewreward.in";
+const siteUrl = process.env.NEXTAUTH_URL || "https://earn.javnex.in";
 
 export const viewport: Viewport = {
   themeColor: "#2563EB",
