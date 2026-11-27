@@ -15,9 +15,15 @@ export async function GET() {
       nextAuthUrl: process.env.NEXTAUTH_URL,
     };
 
-    // Step 1: Issuer
-    const issuer = await Issuer.discover("https://accounts.google.com/.well-known/openid-configuration");
-    diagnostics.issuer = "discovered";
+    // Step 1: Static Issuer (no https.request required!)
+    const issuer = new Issuer({
+      issuer: "https://accounts.google.com",
+      authorization_endpoint: "https://accounts.google.com/o/oauth2/v2/auth",
+      token_endpoint: "https://oauth2.googleapis.com/token",
+      userinfo_endpoint: "https://openidconnect.googleapis.com/v1/userinfo",
+      jwks_uri: "https://www.googleapis.com/oauth2/v3/certs",
+    });
+    diagnostics.issuer = "static-created";
 
     // Step 2: Client
     const clientId = process.env.GOOGLE_CLIENT_ID || "758717407504-589te6v2b5gc0mgodjrnacpg6romi2ku.apps.googleusercontent.com";

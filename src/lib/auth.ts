@@ -24,6 +24,33 @@ export function isAdminEmail(email: string): boolean {
   );
 }
 
+export function getGoogleProvider() {
+  const provider = GoogleProvider({
+    clientId:
+      process.env.GOOGLE_CLIENT_ID ||
+      "758717407504-589te6v2b5gc0mgodjrnacpg6romi2ku.apps.googleusercontent.com",
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+    authorization: {
+      url: "https://accounts.google.com/o/oauth2/v2/auth",
+      params: {
+        prompt: "consent",
+        access_type: "offline",
+        response_type: "code",
+        scope: "openid email profile",
+      },
+    },
+    token: "https://oauth2.googleapis.com/token",
+    userinfo: "https://openidconnect.googleapis.com/v1/userinfo",
+    issuer: "https://accounts.google.com",
+    jwks_endpoint: "https://www.googleapis.com/oauth2/v3/certs",
+  });
+  // In Cloudflare Workers (OpenNext runtime), wellKnown triggers Issuer.discover
+  // which invokes Node's legacy https.request. Removing wellKnown forces openid-client
+  // to construct the client statically with the explicit endpoints without network errors.
+  delete (provider as any).wellKnown;
+  return provider;
+}
+
 export function getAuthOptions(): NextAuthOptions {
   return {
     session: {
@@ -35,12 +62,7 @@ export function getAuthOptions(): NextAuthOptions {
       error: "/auth/login",
     },
     providers: [
-      GoogleProvider({
-        clientId:
-          process.env.GOOGLE_CLIENT_ID ||
-          "758717407504-589te6v2b5gc0mgodjrnacpg6romi2ku.apps.googleusercontent.com",
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-      }),
+      getGoogleProvider(),
     ],
   callbacks: {
     async signIn({ user, account }) {
