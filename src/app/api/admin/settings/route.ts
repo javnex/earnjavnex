@@ -15,6 +15,12 @@ const settingsSchema = z.object({
 // GET /api/admin/settings
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    const email = (session?.user as any)?.email;
+    if (!session || (session.user as any)?.role !== "ADMIN" || !isAdminEmail(email)) {
+      return NextResponse.json({ error: "Forbidden: Admin access only" }, { status: 403 });
+    }
+
     try {
       const supabase = getSupabaseAdmin();
       const { data: supaSetting, error: sErr } = await supabase
