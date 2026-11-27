@@ -3,9 +3,12 @@ import { ShieldCheck, ArrowLeft, Lock, FileText, UserCheck, AlertTriangle } from
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Notice - EarnReward | India DPDP Act 2023 Compliant",
+  title: "Privacy Policy",
   description:
-    "Official Privacy Notice under India's Digital Personal Data Protection Act, 2023 and DPDP Rules, 2025 detailing data processing, retention, user rights, and grievance redressal.",
+    "Read EarnReward's official privacy policy under the India DPDP Act 2023 covering data handling, cookies, and user rights.",
+  alternates: {
+    canonical: "/privacy",
+  },
 };
 
 export default function PrivacyPolicyPage() {

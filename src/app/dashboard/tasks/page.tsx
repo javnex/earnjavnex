@@ -166,7 +166,7 @@ export default function TasksPage() {
           : {
               isOpen: true,
               errorText: errorMsg,
-              taskTitle: currentTask?.title || "Review Task",
+              taskTitle: currentTask?.title || "Task",
               assignedStars: assignedStars || currentTask?.assignedStars,
               assignedReviewText: assignedReviewText || currentTask?.assignedReview,
               shopUrl: currentTask?.shopUrl,
@@ -253,12 +253,12 @@ export default function TasksPage() {
           <span>Anti-Spam & Natural Stealth Pacing Active</span>
         </div>
         <p className="text-[11px] text-slate-600 leading-relaxed font-sans">
-          To protect client listings (50–200 existing reviews) from automated spam filters, this terminal enforces natural organic growth standards:
+          To protect client listings (50–200 existing listings) from automated spam filters, this terminal enforces natural organic growth standards:
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px] text-slate-700">
           <div className="flex items-start gap-2 bg-white/80 p-2.5 rounded-xl border border-blue-100 shadow-2xs">
             <span className="text-emerald-600 font-bold shrink-0">✓</span>
-            <span><strong>Natural Velocity Drip:</strong> Listings capped at 2–3 reviews/day to prevent sudden burst anomalies.</span>
+            <span><strong>Natural Velocity Drip:</strong> Listings capped at daily limits to prevent sudden burst anomalies.</span>
           </div>
           <div className="flex items-start gap-2 bg-white/80 p-2.5 rounded-xl border border-blue-100 shadow-2xs">
             <span className="text-emerald-600 font-bold shrink-0">✓</span>
@@ -270,7 +270,7 @@ export default function TasksPage() {
           </div>
           <div className="flex items-start gap-2 bg-white/80 p-2.5 rounded-xl border border-blue-100 shadow-2xs">
             <span className="text-emerald-600 font-bold shrink-0">✓</span>
-            <span><strong>10-Min Pacing Cooldown:</strong> Enforced between tasks to de-synchronize review ring algorithms.</span>
+            <span><strong>10-Min Pacing Cooldown:</strong> Enforced between tasks to de-synchronize bot detection algorithms.</span>
           </div>
         </div>
       </div>
@@ -620,7 +620,7 @@ export default function TasksPage() {
                 <AlertTriangle className="h-6 w-6 text-rose-600" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Review Verification Failed</h3>
+                <h3 className="text-lg font-bold text-slate-900">Task Verification Failed</h3>
                 <p className="text-xs text-slate-500">
                   Automated anti-cheat rejected this submission
                 </p>
@@ -647,7 +647,7 @@ export default function TasksPage() {
                   <span>Sign In with Google to Claim Reward</span>
                 </div>
                 <p className="text-xs text-slate-700 leading-relaxed font-sans">
-                  Your review link was received, but we need your Google account login so we know which wallet to deposit your reward into!
+                  Your proof link was received, but we need your Google account login so we know which wallet to deposit your reward into!
                 </p>
                 <button
                   type="button"
@@ -681,7 +681,7 @@ export default function TasksPage() {
                 {errorModal.assignedReviewText && (
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-slate-600">
-                      <span className="text-[11px] font-medium font-mono">Your Assigned Review Text:</span>
+                      <span className="text-[11px] font-medium font-mono">Your Assigned Text:</span>
                       <button
                         type="button"
                         onClick={() => handleCopyReview("modal", errorModal.assignedReviewText!)}
@@ -707,8 +707,8 @@ export default function TasksPage() {
                 )}
 
                 <div className="text-[11px] text-slate-600 space-y-1 pt-2 border-t border-slate-200">
-                  <p>1. Open the store listing on your maps app, tap on your review and click <strong>Edit</strong>.</p>
-                  <p>2. Give exactly <strong>{errorModal.assignedStars || 5} Stars</strong> and paste the assigned review text.</p>
+                  <p>1. Open the store listing on your maps app, tap on your submission and click <strong>Edit</strong>.</p>
+                  <p>2. Give exactly <strong>{errorModal.assignedStars || 5} Stars</strong> and paste the assigned text.</p>
                   <p>3. Wait 30 seconds for the public listing to refresh, then click <strong>Verify & Earn</strong> again.</p>
                 </div>
               </div>

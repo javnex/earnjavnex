@@ -3,9 +3,12 @@ import { FileText, ArrowLeft, ShieldCheck, CheckCircle2, AlertOctagon } from "lu
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service - EarnReward | Micro-Task Platform Rules",
+  title: "Terms of Service",
   description:
-    "Official Terms and Conditions for EarnReward platform governing micro-tasks, internal wallet transfers, Polygon USDT payouts, and account rules.",
+    "Terms of Service and user rules for completing online micro-tasks, zero-fee internal transfers, and fast bank withdrawals on EarnReward.",
+  alternates: {
+    canonical: "/terms",
+  },
 };
 
 export default function TermsPage() {
@@ -68,13 +71,13 @@ export default function TermsPage() {
           <section className="glare-card rounded-2xl p-6 sm:p-7 space-y-3 bg-white border border-slate-200">
             <h2 className="text-base font-bold text-slate-900 font-mono flex items-center gap-2">
               <span className="text-blue-600 font-bold">03.</span>
-              <span>task Rules & Quota Control</span>
+              <span>Task Rules & Quota Control</span>
             </h2>
             <p>
               EarnReward connects users to active shop tasks with strict programmatic constraints:
             </p>
             <ul className="list-disc pl-5 space-y-2 text-slate-600 text-xs">
-              <li><strong className="text-slate-900 font-mono">Strict 1 Review per Shop per Account:</strong> Each user account may submit at most one verified review per shop task listing. Multiple submissions to the same shop task from the same account are blocked.</li>
+              <li><strong className="text-slate-900 font-mono">Strict 1 Task per Shop per Account:</strong> Each user account may submit at most one verified task per shop task listing. Multiple submissions to the same shop task from the same account are blocked.</li>
               <li><strong className="text-slate-900 font-mono">Proof Verification:</strong> Users must submit a valid public review proof URL containing the assigned review content and star rating. Submitting broken, private, or irrelevant URLs will lead to rejection.</li>
               <li><strong className="text-slate-900 font-mono">Quota Auto-Close:</strong> Each task listing has a maximum review limit set by the administrator. Once the quota is reached, the task automatically closes.</li>
               <li><strong className="text-slate-900 font-mono">Task Reward:</strong> Each verified review credits ₹10.00 INR directly into the user&apos;s internal web wallet.</li>

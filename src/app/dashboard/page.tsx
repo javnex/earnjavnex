@@ -108,6 +108,18 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-4">
+        <div>
+          <h1 className="text-2xl font-black tracking-tight text-slate-900">
+            Account Dashboard
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Monitor your task performance, wallet balance, and instant payout status.
+          </p>
+        </div>
+      </div>
+
       {/* Top Web Wallet Terminal */}
       <WalletCard />
 

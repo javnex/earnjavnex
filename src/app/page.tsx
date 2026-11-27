@@ -24,23 +24,44 @@ export const revalidate = 0;
 export default function HomePage() {
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "WebApplication",
-    name: "EarnReward",
-    applicationCategory: "BusinessApplication",
-    operatingSystem: "All",
-    browserRequirements: "Requires JavaScript. Requires HTML5.",
-    description:
-      "Micro-task platform for Indian users to complete verified tasks, earn ₹10 per task, pool balances across secondary accounts with zero fees, and cash out ₹100 directly to Indian bank accounts.",
-    offers: {
-      "@type": "Offer",
-      price: "0",
-      priceCurrency: "INR",
-    },
-    provider: {
-      "@type": "Organization",
-      name: "EarnReward",
-      url: "https://earn.javnex.in",
-    },
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://earn.javnex.in/#organization",
+        "name": "EarnReward",
+        "url": "https://earn.javnex.in",
+        "logo": "https://earn.javnex.in/logo.png",
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "email": "info@javnex.in",
+          "contactType": "customer service",
+        },
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://earn.javnex.in/#website",
+        "url": "https://earn.javnex.in",
+        "name": "EarnReward",
+        "publisher": { "@id": "https://earn.javnex.in/#organization" },
+      },
+      {
+        "@type": "WebApplication",
+        "@id": "https://earn.javnex.in/#webapp",
+        "name": "EarnReward",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "All",
+        "browserRequirements": "Requires JavaScript. Requires HTML5.",
+        "url": "https://earn.javnex.in",
+        "description":
+          "Micro-task rewards platform to complete simple verified tasks, pool balances with zero-fee internal transfers, and cash out directly to Indian bank accounts.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "INR",
+        },
+        "publisher": { "@id": "https://earn.javnex.in/#organization" },
+      },
+    ],
   };
 
   return (

@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     template: "%s | EarnReward",
   },
   description:
-    "Earn ₹10 per verified task. Pool balances across multiple accounts with ₹0-fee internal transfers and cash out directly once your wallet hits ₹100. Compliant with India DPDP Act 2023.",
+    "Earn rewards by completing simple online tasks. Pool balances with ₹0-fee internal transfers and cash out directly to your bank account. DPDP compliant.",
   keywords: [
     "task rewards",
     "micro-task platform",
@@ -50,17 +50,26 @@ export const metadata: Metadata = {
   openGraph: {
     title: "EarnReward - Earn ₹100+ by Completing Tasks | Fast ₹100 Payouts",
     description:
-      "Earn ₹10 per verified task. Zero-fee account pooling transfers. Automated fast ₹100 cashouts directly to your bank account.",
+      "Earn rewards by completing simple online tasks. Pool balances with ₹0-fee internal transfers and cash out directly to your bank account.",
     url: siteUrl,
     siteName: "EarnReward",
     locale: "en_IN",
     type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "EarnReward Platform",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "EarnReward - Earn ₹100+ by Completing Tasks",
     description:
-      "Earn ₹10 per verified task. Pool balances with ₹0 fees. Fast ₹100 cashouts.",
+      "Earn rewards by completing simple online tasks. Pool balances with ₹0-fee internal transfers and cash out fast to bank.",
+    images: ["/og-image.png"],
   },
   robots: {
     index: true,

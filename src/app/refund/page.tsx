@@ -3,9 +3,12 @@ import { ArrowLeft, Wallet, CheckCircle2, ShieldAlert, Zap, RefreshCw } from "lu
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Refund, Withdrawal & Payout Policy - EarnReward",
+  title: "Payout & Refund Policy",
   description:
-    "Official payout, withdrawal, and refund policy for EarnReward micro-tasks, Polygon USDT disbursements, 6% cash-out buffer, and failed transaction handling.",
+    "Official payout and refund terms for EarnReward micro-task earnings, 6% cash-out fee buffers, and bank IMPS disbursement rules.",
+  alternates: {
+    canonical: "/refund",
+  },
 };
 
 export default function RefundPolicyPage() {

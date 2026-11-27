@@ -1,0 +1,23 @@
+# EarnReward
+
+> EarnReward (https://earn.javnex.in) is an audited micro-task web terminal for Indian users enabling fast task completion, zero-fee internal transfers, and fast bank cashouts.
+
+## Platform Details
+- **Website**: https://earn.javnex.in
+- **Platform Type**: Micro-task rewards and zero-fee wallet pooling
+- **Target Audience**: Indian users seeking legitimate task compensation
+- **Compliance**: India Digital Personal Data Protection Act (DPDP Act 2023) and DPDP Rules 2025
+- **Payout Methods**: Direct Bank Transfer (IMPS), Polygon USDT (with 6% exchange spread & TDS buffer)
+- **Minimum Payout**: ₹100 INR
+
+## Key Platform Features
+- **Verified Micro-Tasks**: Complete simple online shop tasks and earn ₹10 to ₹25+ per verified task.
+- **Zero-Fee Peer Transfers**: Transfer wallet credits to friends and family with ₹0 fees to pool funds toward withdrawal minimums.
+- **Strict Anti-Spam Drip Velocity**: Organic pacing and single task limits to protect merchant listings from spam.
+- **Transparent Ledger**: Cryptographically sound internal double-entry balances with public payout tracking.
+
+## Core Legal & Regulatory Documents
+- [Privacy Policy](https://earn.javnex.in/privacy): DPDP Act 2023 compliant statutory notice detailing data processing, retention, user rights, and contact details.
+- [Terms of Service](https://earn.javnex.in/terms): Platform governance, one task per shop rule, anti-bot rules, and withdrawal guidelines.
+- [Payout & Refund Policy](https://earn.javnex.in/refund): Withdrawal minimums, 6% cash-out fee buffers, and bank IMPS disbursement rules.
+- [Grievance Redressal](https://earn.javnex.in/grievance): Data Protection Officer contact and statutory grievance submission portal.
