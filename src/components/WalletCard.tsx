@@ -110,7 +110,7 @@ export default function WalletCard() {
                 ? "Withdraw your balance instantly to your Indian bank account via CoinDCX."
                 : `Complete ${tasksNeeded} more task${
                     tasksNeeded > 1 ? "s" : ""
-                  } (or pool ₹10 from secondary accounts) to unlock instant withdraw.`}
+                  } (or pool rewards from secondary accounts) to unlock instant withdraw.`}
             </p>
           </div>
         </div>
@@ -122,7 +122,7 @@ export default function WalletCard() {
             className="flex items-center justify-center gap-2 rounded-2xl bg-white hover:bg-blue-50 text-blue-900 font-bold px-5 py-3 text-xs text-center shadow-md transition-all cursor-pointer"
           >
             <ListTodo className="h-4 w-4 text-blue-700" />
-            <span>Complete Tasks (+₹10)</span>
+            <span>Complete Tasks</span>
           </Link>
 
           <Link
@@ -151,7 +151,7 @@ export default function WalletCard() {
       <div className="mt-6 pt-4 border-t border-blue-700/40 flex items-start sm:items-center gap-2 text-xs text-blue-200">
         <Info className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5 sm:mt-0" />
         <span>
-          <strong className="text-white">Pro Tip:</strong> Own multiple accounts? Complete the review on each and transfer your ₹10 earnings to this ID for ₹0 fee.
+          <strong className="text-white">Pro Tip:</strong> Own multiple accounts? Complete tasks on each and transfer your earnings to this ID for ₹0 fee.
         </span>
       </div>
     </div>

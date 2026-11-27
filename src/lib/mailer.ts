@@ -281,66 +281,102 @@ export async function sendNewTaskAlertEmail(
     instructions,
   } = payload;
 
-  const subject = `New Task Available: Earn ₹${rewardInr.toFixed(0)} on EarnReward`;
+  const rewardFormatted = typeof rewardInr === "number" ? rewardInr.toFixed(0) : String(rewardInr);
+  const subject = `New Task Available: Earn ₹${rewardFormatted} on EarnReward`;
   const taskUrl = `${APP_URL}/dashboard/tasks`;
   const unsubscribeUrl = `${APP_URL}/unsubscribe?email=${encodeURIComponent(toEmail)}`;
 
   const html = `
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
   <title>New Task Alert</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 24px 12px; }
-    .card { max-width: 580px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
-    .header { background: linear-gradient(135deg, #059669 0%, #10b981 100%); padding: 32px 24px; text-align: center; color: #ffffff; }
-    .content { padding: 32px 24px; }
-    .task-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 16px; padding: 20px; margin: 20px 0; }
-    .reward-pill { display: inline-block; background: #059669; color: #ffffff; font-weight: 800; font-size: 14px; padding: 6px 14px; border-radius: 9999px; }
-    .btn { display: inline-block; background: #059669; color: #ffffff !important; text-decoration: none; padding: 14px 28px; border-radius: 14px; font-weight: bold; font-size: 14px; text-align: center; }
-    .footer { text-align: center; font-size: 11px; color: #64748b; padding: 20px; border-top: 1px solid #e2e8f0; background: #fafafa; }
-    .unsubscribe { color: #94a3b8; text-decoration: underline; }
-  </style>
 </head>
-<body>
-  <div class="card">
-    <div class="header">
-      <h1 style="margin: 0; font-size: 24px; font-weight: 800;">EarnReward</h1>
-      <p style="margin: 6px 0 0 0; font-size: 13px; opacity: 0.9;">New Verified Task Available</p>
-    </div>
-
-    <div class="content">
-      <h2 style="font-size: 18px; color: #0f172a; margin-top: 0;">Hi ${userName},</h2>
-      <p style="font-size: 14px; line-height: 1.6; color: #334155;">
-        A new verified task has just been published on your EarnReward dashboard!
-      </p>
-
-      <div class="task-card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #065f46;">${title}</h3>
-          <span class="reward-pill">+₹${rewardInr.toFixed(0)} INR</span>
-        </div>
-        ${instructions ? `<p style="font-size: 12px; color: #166534; line-height: 1.5; margin: 0;">${instructions.substring(0, 160)}...</p>` : ""}
-      </div>
-
-      <div style="text-align: center; margin: 24px 0 12px 0;">
-        <a href="${taskUrl}" class="btn" target="_blank" rel="noopener noreferrer">Claim & Complete Task &rarr;</a>
-      </div>
-      <p style="text-align: center; font-size: 12px; color: #64748b;">
-        First-come, first-served. Once maximum limits are reached, the task automatically closes.
-      </p>
-    </div>
-
-    <div class="footer">
-      <p style="margin: 0 0 6px 0;">&copy; 2026 EarnReward (earn.javnex.in). All rights reserved.</p>
-      <p style="margin: 0; color: #94a3b8;">
-        You received this because task alerts are enabled in your account.
-        <br />
-        <a href="${unsubscribeUrl}" class="unsubscribe">Turn off task alert emails</a> | Replies routed to ${REPLY_TO_EMAIL}
-      </p>
-    </div>
+<body style="margin: 0; padding: 20px 10px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #0f172a;">
+  <!-- Preheader preview text for inbox list -->
+  <div style="display: none; max-height: 0px; overflow: hidden;">
+    New Task: ${title} | Earn ₹${rewardFormatted} instantly on EarnReward. Limited slots available!
   </div>
+
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+    <!-- Brand Header -->
+    <tr>
+      <td style="background: linear-gradient(135deg, #059669 0%, #047857 100%); padding: 30px 24px; text-align: center;">
+        <h1 style="margin: 0; font-size: 26px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">EarnReward</h1>
+        <p style="margin: 6px 0 0 0; font-size: 13px; color: #d1fae5; font-weight: 500;">New Verified Task Published</p>
+      </td>
+    </tr>
+
+    <!-- Main Content Area -->
+    <tr>
+      <td style="padding: 32px 28px; background-color: #ffffff;">
+        <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 700; color: #0f172a;">Hello ${userName},</h2>
+        <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #334155;">
+          A new verified task is now live on your <strong>EarnReward</strong> portal. Complete it in 3 quick steps to receive an instant credit directly to your wallet balance.
+        </p>
+
+        <!-- Task Highlight Card -->
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f0fdf4; border: 2px solid #bbf7d0; border-radius: 16px; margin: 0 0 28px 0;">
+          <tr>
+            <td style="padding: 20px 22px;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td style="vertical-align: middle;">
+                    <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #047857; margin-bottom: 4px;">Task Name</div>
+                    <div style="font-size: 17px; font-weight: 800; color: #064e3b; line-height: 1.3;">${title}</div>
+                  </td>
+                  <td style="vertical-align: middle; text-align: right;" align="right">
+                    <span style="display: inline-block; background-color: #059669; color: #ffffff; font-weight: 800; font-size: 14px; padding: 7px 14px; border-radius: 30px; white-space: nowrap; box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);">
+                      +₹${rewardFormatted} INR
+                    </span>
+                  </td>
+                </tr>
+              </table>
+
+              ${instructions ? `
+              <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed #86efac;">
+                <div style="font-size: 11px; font-weight: 700; color: #047857; text-transform: uppercase; margin-bottom: 4px;">Instructions:</div>
+                <div style="font-size: 12px; color: #166534; line-height: 1.5;">${instructions.substring(0, 180)}</div>
+              </div>` : ""}
+            </td>
+          </tr>
+        </table>
+
+        <!-- Call to Action Button -->
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+          <tr>
+            <td align="center" style="padding: 4px 0 16px 0;">
+              <a href="${taskUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #059669; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-weight: 800; font-size: 14px; letter-spacing: 0.2px; box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);">
+                Claim &amp; Start Task (₹${rewardFormatted}) &rarr;
+              </a>
+            </td>
+          </tr>
+        </table>
+
+        <p style="margin: 0; text-align: center; font-size: 12px; color: #64748b; line-height: 1.4;">
+          ⚡ <strong>Quota Active:</strong> First-come, first-served. Once maximum daily limits are completed, this listing closes automatically.
+        </p>
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 24px 20px; text-align: center;">
+        <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: #475569;">
+          &copy; 2026 EarnReward (earn.javnex.in). All rights reserved.
+        </p>
+        <p style="margin: 0; font-size: 11px; color: #94a3b8; line-height: 1.6;">
+          You received this email because task notifications are active on your account.
+          <br />
+          <a href="${unsubscribeUrl}" style="color: #64748b; text-decoration: underline;">Unsubscribe from task alerts</a> &bull; Support replies to <a href="mailto:${REPLY_TO_EMAIL}" style="color: #64748b;">${REPLY_TO_EMAIL}</a>
+        </p>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
   `;

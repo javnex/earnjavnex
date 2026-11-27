@@ -129,9 +129,12 @@ export default function TasksPage() {
         throw new Error(data.error || "Submission failed");
       }
 
+      const currentTask = tasks.find((t) => t.id === taskId);
+      const earnedReward = currentTask?.rewardInr || 20;
+
       setMessage({
         type: "success",
-        text: data.message || "Task submitted successfully! ₹10 credited to your wallet.",
+        text: data.message || `Task submitted successfully! ₹${earnedReward} credited to your wallet.`,
       });
 
       // Clear input
@@ -178,7 +181,7 @@ export default function TasksPage() {
             <span>Available Tasks</span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Complete assigned tasks, paste your proof link, and earn ₹10 instantly in your web wallet.
+            Complete assigned tasks, paste your proof link, and earn rewards instantly in your web wallet.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -366,7 +369,7 @@ export default function TasksPage() {
                           Complete Task in 3 Simple Clicks
                         </h4>
                         <p className="text-[11px] text-slate-500">
-                          1. Copy Review ➔ 2. Open Store Listing ➔ 3. Paste link to verify
+                          1. Copy Text ➔ 2. Open Store Listing ➔ 3. Paste link to verify
                         </p>
                       </div>
                     </div>
@@ -375,7 +378,7 @@ export default function TasksPage() {
                     </span>
                   </div>
 
-                  {/* CLICK 1: Copy Review */}
+                  {/* CLICK 1: Copy Text */}
                   <div
                     className={`rounded-xl border p-3.5 space-y-2.5 transition-all ${
                       copiedTaskId === task.id
@@ -393,7 +396,7 @@ export default function TasksPage() {
                           {copiedTaskId === task.id ? "✓" : "1"}
                         </span>
                         <span className="text-xs font-bold text-slate-900">
-                          Click 1: Copy Assigned Review Text
+                          Click 1: Copy Assigned Text
                         </span>
                       </div>
 
@@ -414,7 +417,7 @@ export default function TasksPage() {
                         ) : (
                           <>
                             <Copy className="h-3.5 w-3.5" />
-                            <span>Copy Review</span>
+                            <span>Copy Text</span>
                           </>
                         )}
                       </button>
@@ -477,18 +480,18 @@ export default function TasksPage() {
                     </div>
 
                     <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50 rounded-lg p-2.5 border border-slate-100">
-                      📍 <strong>Safe Organic Flow:</strong> Tap <strong>&ldquo;Search on Maps&rdquo;</strong> ➔ Select <strong>{task.title}</strong> ➔ Give <strong>{assignedStars} stars</strong> ➔ Paste the review (already copied in your clipboard) ➔ Tap <strong>Post</strong>. Then tap <strong>Share ➔ Copy link</strong>.
+                      📍 <strong>Safe Organic Flow:</strong> Tap <strong>&ldquo;Search on Maps&rdquo;</strong> ➔ Select <strong>{task.title}</strong> ➔ Give <strong>{assignedStars} stars</strong> ➔ Paste the text (already copied in your clipboard) ➔ Tap <strong>Post</strong>. Then tap <strong>Share ➔ Copy link</strong>.
                     </p>
                   </div>
 
-                  {/* CLICK 3: Paste Review Link & Verify */}
+                  {/* CLICK 3: Paste Proof Link & Verify */}
                   <div className="rounded-xl border border-emerald-200/90 bg-white p-3.5 space-y-2.5 shadow-2xs">
                     <div className="flex items-center gap-2">
                       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-black text-white">
                         3
                       </span>
                       <span className="text-xs font-bold text-slate-900">
-                        Click 3: Paste Review Link & Verify
+                        Click 3: Paste Proof Link & Verify
                       </span>
                     </div>
 
@@ -496,7 +499,7 @@ export default function TasksPage() {
                       <div className="relative flex-1">
                         <input
                           type="url"
-                          placeholder="Paste public review URL (https://maps.app.goo.gl/...)"
+                          placeholder="Paste public proof URL (https://share.google/... or https://maps.app.goo.gl/...)"
                           value={proofInputs[task.id] || ""}
                           onChange={(e) => handleInputChange(task.id, e.target.value)}
                           disabled={isSubmitting}
@@ -531,7 +534,7 @@ export default function TasksPage() {
                         ) : (
                           <>
                             <CheckCircle2 className="h-3.5 w-3.5" />
-                            <span>Verify & Earn ₹10</span>
+                            <span>Verify & Earn ₹{task.rewardInr}</span>
                           </>
                         )}
                       </button>
@@ -641,7 +644,7 @@ export default function TasksPage() {
               <div className="text-[11px] text-slate-600 space-y-1 pt-2 border-t border-slate-200">
                 <p>1. Open the store listing on your maps app, tap on your review and click <strong>Edit</strong>.</p>
                 <p>2. Give exactly <strong>{errorModal.assignedStars || 5} Stars</strong> and paste the assigned review text.</p>
-                <p>3. Wait 30 seconds for the public listing to refresh, then click <strong>Submit & Earn ₹10</strong> again.</p>
+                <p>3. Wait 30 seconds for the public listing to refresh, then click <strong>Verify & Earn</strong> again.</p>
               </div>
             </div>
 

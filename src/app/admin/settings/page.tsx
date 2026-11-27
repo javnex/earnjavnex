@@ -237,7 +237,7 @@ export default function AdminSettingsPage() {
                 className="w-full rounded-xl futuristic-input px-3.5 py-2.5 text-xs text-slate-900 font-mono bg-white"
               >
                 <option value="AUTO">
-                  Instant Auto-Approval (URL syntax & duplicate check passes → ₹10 credited instantly)
+                  Instant Auto-Approval (URL syntax & duplicate check passes → task reward credited instantly)
                 </option>
                 <option value="MANUAL">
                   Manual Admin Approval (Submissions marked Pending until Admin verifies in Queue)

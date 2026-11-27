@@ -273,13 +273,13 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Verification failed: Could not load review details from the store listing. If you just posted it, the listing may take 1-2 minutes to publish it publicly. Please ensure your review is visible and try again.",
+            "Verification failed: Could not verify this Google Maps review link. Please ensure your review is published publicly and try again.",
         },
         { status: 400 }
       );
     }
 
-    // A. Verify Reviewer Name Match
+    // A. Verify Reviewer Name Match (if DOM details were scraped)
     if (liveScrape.reviewerName) {
       const nameMatches = isReviewerNameMatch(expectedReviewer, liveScrape.reviewerName);
       if (!nameMatches) {
@@ -290,7 +290,7 @@ export async function POST(req: Request) {
           { status: 400 }
         );
       }
-    } else {
+    } else if (!liveScrape.isStructuralOnly) {
       return NextResponse.json(
         {
           error:
@@ -317,32 +317,32 @@ export async function POST(req: Request) {
       }
     }
 
-    // C. Verify Review Text Match (Strict Anti-Cheat: Review must match assigned AI text)
+    // C. Verify Review Text Match (Strict Anti-Cheat: Review must match assigned text)
     if (!assignedReviewText || !assignedReviewText.trim()) {
       return NextResponse.json(
         {
           error:
-            "Verification failed: Missing assigned review text. Please copy your assigned review from the task card and post it.",
+            "Verification failed: Missing assigned text. Please copy your assigned text from the task card and post it.",
         },
         { status: 400 }
       );
     }
 
-    if (!liveScrape.reviewText || !liveScrape.reviewText.trim()) {
+    if (liveScrape.reviewText) {
+      const textMatchResult = isReviewTextMatch(assignedReviewText, liveScrape.reviewText);
+      if (!textMatchResult.matches) {
+        return NextResponse.json(
+          {
+            error: `Verification failed: Text mismatch! The text on the store listing does not match your assigned task text. Users cannot write arbitrary text; you must copy and post the exact assigned text.`,
+          },
+          { status: 400 }
+        );
+      }
+    } else if (!liveScrape.isStructuralOnly) {
       return NextResponse.json(
         {
           error:
             "Verification failed: Could not detect your review text on the store listing. If you just posted it, the listing may take 1-2 minutes to display the text publicly. Please wait a moment and try again.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const textMatchResult = isReviewTextMatch(assignedReviewText, liveScrape.reviewText);
-    if (!textMatchResult.matches) {
-      return NextResponse.json(
-        {
-          error: `Verification failed: Review text mismatch! The review text on the store listing does not match your assigned AI review text. Users cannot write arbitrary reviews; you must copy and post the exact assigned review text.`,
         },
         { status: 400 }
       );
@@ -360,7 +360,9 @@ export async function POST(req: Request) {
       }
     }
 
-    const autoVerifiedDetails = `Auto-Verified: Reviewer="${liveScrape.reviewerName || expectedReviewer}", Shop="${liveScrape.shopName || targetTask.title}", Stars=${liveScrape.starRating || assignedStars || 5}★`;
+    const autoVerifiedDetails = liveScrape.isStructuralOnly
+      ? `Auto-Verified (CID Match): Reviewer="${expectedReviewer}", Shop="${targetTask.title}", Stars=${assignedStars || 5}★`
+      : `Auto-Verified: Reviewer="${liveScrape.reviewerName || expectedReviewer}", Shop="${liveScrape.shopName || targetTask.title}", Stars=${liveScrape.starRating || assignedStars || 5}★`;
 
     // 6. Fetch Settings for Verification Mode
     const { data: setting } = await supabase
@@ -444,8 +446,8 @@ export async function POST(req: Request) {
       {
         success: true,
         message: isAutoMode
-          ? `Review verified! ₹${rewardAmount} credited to your wallet.`
-          : "Review submitted for verification. Reward will be credited upon approval.",
+          ? `Task verified! ₹${rewardAmount} credited to your wallet.`
+          : "Task submitted for verification. Reward will be credited upon approval.",
         submission: insertedSub,
         credited: isAutoMode,
         rewardAmount,

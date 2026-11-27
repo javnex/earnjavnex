@@ -209,7 +209,7 @@ export default function DashboardPage() {
                         href="/dashboard/tasks"
                         className="btn-futuristic px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-xs transition-all cursor-pointer"
                       >
-                        Complete in 3 Clicks (+₹10) →
+                        Complete in 3 Clicks (+₹{task.rewardInr || 20}) →
                       </Link>
                     </div>
                   </div>
@@ -234,7 +234,7 @@ export default function DashboardPage() {
               <li>Sign in with Account 2, 3, etc.</li>
               <li>Complete the task on each account.</li>
               <li>
-                Transfer the ₹10 reward to this primary ID with ₹0 fee.
+                Transfer rewards to this primary ID with ₹0 fee.
               </li>
               <li>Instantly unlock the ₹100 threshold!</li>
             </ol>

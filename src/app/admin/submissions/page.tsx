@@ -132,7 +132,7 @@ export default function AdminSubmissionsPage() {
             </span>
             <span className="text-[10px] text-slate-500 font-mono">
               {verificationMode === "AUTO"
-                ? "Valid links credit ₹10 instantly"
+                ? "Valid links credit rewards instantly"
                 : "Admin manual verification required"}
             </span>
           </div>
@@ -273,7 +273,7 @@ export default function AdminSubmissionsPage() {
                             onClick={() => handleAction(sub.id, "APPROVE")}
                             className="px-3 py-1.5 rounded-xl btn-futuristic text-[11px] font-mono font-bold transition-all cursor-pointer"
                           >
-                            Approve (+₹10)
+                            Approve (+₹{sub.rewardCredited || sub.task?.rewardInr || 20})
                           </button>
                           <button
                             onClick={() => handleAction(sub.id, "REJECT")}

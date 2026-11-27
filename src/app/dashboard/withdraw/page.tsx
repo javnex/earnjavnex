@@ -281,7 +281,7 @@ export default function WithdrawPage() {
               href="/dashboard/tasks"
               className="btn-futuristic inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-500/20 cursor-pointer"
             >
-              <span>Complete Review Tasks (+₹10 each)</span>
+              <span>Complete Available Tasks</span>
               <ArrowRight className="h-3.5 w-3.5 text-white" />
             </Link>
 

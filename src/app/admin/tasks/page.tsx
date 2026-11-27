@@ -38,7 +38,7 @@ export default function AdminTasksPage() {
   const [title, setTitle] = useState("");
   const [shopUrl, setShopUrl] = useState("");
   const [instructions, setInstructions] = useState("");
-  const [rewardInr, setRewardInr] = useState("10");
+  const [rewardInr, setRewardInr] = useState("20");
   const [maxLimit, setMaxLimit] = useState("50");
   const [targetRating, setTargetRating] = useState("4.2");
   const [dailyLimit, setDailyLimit] = useState("2");
