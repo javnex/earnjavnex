@@ -13,15 +13,29 @@ export function generateUserCode(): string {
 }
 
 /**
- * Strict Security: ONLY earnjavnex@gmail.com is permitted as ADMIN
+ * Strict Security: Admin check supporting all authorized admin emails and env
  */
 export function isAdminEmail(email: string): boolean {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
-  return (
-    normalized === "earnjavnex@gmail.com" ||
-    normalized === "earn.javnex@gmail.com"
-  );
+
+  const authorizedAdmins = [
+    "javnexreview@gmail.com",
+    "javnex.review@gmail.com",
+    "earnjavnex@gmail.com",
+    "earn.javnex@gmail.com",
+  ];
+
+  if (authorizedAdmins.includes(normalized)) return true;
+
+  if (process.env.ADMIN_EMAILS) {
+    const envAdmins = process.env.ADMIN_EMAILS.split(",").map((e) =>
+      e.trim().toLowerCase()
+    );
+    if (envAdmins.includes(normalized)) return true;
+  }
+
+  return false;
 }
 
 export function getGoogleProvider() {
