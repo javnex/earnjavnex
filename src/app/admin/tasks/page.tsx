@@ -179,6 +179,40 @@ export default function AdminTasksPage() {
     }
   };
 
+  const handleUpdateDailyLimit = async (task: Task) => {
+    const currentLimit = (task as any).dailyLimit || 2;
+    const input = prompt(
+      `Enter new daily review limit for "${task.title}":\n(Maximum reviews accepted per day across all users)`,
+      String(currentLimit)
+    );
+    if (!input) return;
+    const newLimit = parseInt(input.trim(), 10);
+    if (isNaN(newLimit) || newLimit < 1) {
+      alert("Please enter a valid positive number (e.g. 5, 10, 20).");
+      return;
+    }
+
+    try {
+      setActionLoadingId(task.id);
+      const currentInst = task.instructions || "";
+      const cleaned = currentInst.replace(/\[DailyLimit:\s*\d+\]/gi, "").trim();
+      const newInst = `[DailyLimit: ${newLimit}] ${cleaned}`;
+
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instructions: newInst }),
+      });
+      if (!res.ok) throw new Error("Failed to update daily limit");
+      setMessage({ type: "success", text: `Daily limit for "${task.title}" updated to ${newLimit} reviews/day!` });
+      fetchTasks();
+    } catch (e: any) {
+      setMessage({ type: "error", text: e.message || "Failed to update daily limit" });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const handleDeleteTask = async (taskId: string, taskTitle: string) => {
     if (!confirm(`Are you sure you want to permanently delete task "${taskTitle}"?`)) return;
     try {
@@ -462,9 +496,15 @@ export default function AdminTasksPage() {
                             <Star className="h-3 w-3 fill-amber-400 text-amber-500" />
                             <span>{(task as any).targetRating ? Number((task as any).targetRating).toFixed(1) : "4.5"} Target</span>
                           </span>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateDailyLimit(task)}
+                            title="Click to change daily review limit"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-bold cursor-pointer transition-all shadow-2xs"
+                          >
                             <span>Today: {(task as any).todayCompletedCount || 0}/{(task as any).dailyLimit || 2} Drip</span>
-                          </span>
+                            <span className="text-[9px] text-blue-500 underline font-normal">Edit</span>
+                          </button>
                         </div>
                         <a
                           href={task.shopUrl}
