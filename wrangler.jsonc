@@ -20,7 +20,10 @@
     }
   ],
   "vars": {
-    "GOOGLE_CLIENT_ID": "758717407504-589te6v2b5gc0mgodjrnacpg6romi2ku.apps.googleusercontent.com"
+    "GOOGLE_CLIENT_ID": "758717407504-589te6v2b5gc0mgodjrnacpg6romi2ku.apps.googleusercontent.com",
+    "PAYMENTS_FROM_EMAIL": "ReviewReward Payouts <payments@javnex.in>",
+    "REPLY_TO_EMAIL": "info@javnex.in",
+    "TASKS_FROM_EMAIL": "ReviewReward Tasks <task@javnex.in>"
   },
   "observability": {
     "enabled": true
