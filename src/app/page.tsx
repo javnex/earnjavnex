@@ -18,6 +18,9 @@ import {
   ChevronRight,
 } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default function HomePage() {
   const jsonLd = {
     "@context": "https://schema.org",

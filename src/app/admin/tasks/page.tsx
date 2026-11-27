@@ -13,6 +13,8 @@ import {
   ToggleLeft,
   ToggleRight,
   Star,
+  Mail,
+  Send,
 } from "lucide-react";
 
 interface Task {
@@ -146,6 +148,32 @@ export default function AdminTasksPage() {
     } catch (err: any) {
       console.error("Failed to toggle status:", err);
       setMessage({ type: "error", text: err.message || "Failed to update status" });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleBroadcastTask = async (taskId: string, taskTitle: string) => {
+    if (!confirm(`Send task alert email to ALL registered users for "${taskTitle}"?`)) return;
+    try {
+      setActionLoadingId(taskId);
+      setMessage(null);
+      const res = await fetch("/api/admin/tasks/broadcast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to broadcast task alert");
+      }
+      setMessage({
+        type: "success",
+        text: data.message || `Task alert successfully broadcast to all users!`,
+      });
+    } catch (err: any) {
+      console.error("Failed to broadcast task:", err);
+      setMessage({ type: "error", text: err.message || "Failed to broadcast task" });
     } finally {
       setActionLoadingId(null);
     }
@@ -485,6 +513,20 @@ export default function AdminTasksPage() {
                       </td>
 
                       <td className="py-3.5 text-right whitespace-nowrap space-x-2">
+                        <button
+                          onClick={() => handleBroadcastTask(task.id, task.title)}
+                          disabled={actionLoadingId === task.id || isClosed}
+                          title="Broadcast email notification to all users"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {actionLoadingId === task.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Mail className="h-3.5 w-3.5" />
+                          )}
+                          <span>Send Alert</span>
+                        </button>
+
                         <button
                           onClick={() => handleToggleStatus(task)}
                           disabled={actionLoadingId === task.id}

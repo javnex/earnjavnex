@@ -223,26 +223,26 @@ export async function POST(req: Request) {
         .single();
 
       if (!tErr && supaTask) {
-        // Trigger asynchronous new task alert to opted-in users
-        (async () => {
-          try {
-            const supabase = getSupabaseAdmin();
-            const { data: supaUsers } = await supabase
-              .from("User")
-              .select("email, name")
-              .neq("task_alerts_enabled", false);
-            if (supaUsers && supaUsers.length > 0) {
-              await broadcastNewTaskAlert(supaUsers, {
-                taskId: supaTask.id,
-                title,
-                rewardInr,
-                instructions: formattedInstructions,
-              });
-            }
-          } catch (err) {
-            console.error("Task alert broadcast error:", err);
+        // Await task alert broadcast so Cloudflare Worker isolate doesn't terminate early
+        try {
+          const supabase = getSupabaseAdmin();
+          const { data: supaUsers } = await supabase
+            .from("User")
+            .select("email, name, task_alerts_enabled");
+          const targetUsers = (supaUsers || []).filter(
+            (u: any) => u.task_alerts_enabled !== false && u.email
+          );
+          if (targetUsers.length > 0) {
+            await broadcastNewTaskAlert(targetUsers, {
+              taskId: supaTask.id,
+              title,
+              rewardInr,
+              instructions: formattedInstructions,
+            });
           }
-        })();
+        } catch (err) {
+          console.error("Task alert broadcast error:", err);
+        }
 
         return NextResponse.json(
           { task: { ...supaTask, targetRating: finalRating, dailyLimit: finalDailyLimit } },
@@ -265,25 +265,23 @@ export async function POST(req: Request) {
       },
     });
 
-    // Trigger asynchronous new task alert to opted-in users (Prisma fallback)
-    (async () => {
-      try {
-        const pUsers = await prisma.user.findMany({
-          where: { task_alerts_enabled: true },
-          select: { email: true, name: true },
+    // Trigger task alert to opted-in users (Prisma fallback)
+    try {
+      const pUsers = await prisma.user.findMany({
+        where: { task_alerts_enabled: true },
+        select: { email: true, name: true },
+      });
+      if (pUsers.length > 0) {
+        await broadcastNewTaskAlert(pUsers, {
+          taskId: task.id,
+          title,
+          rewardInr,
+          instructions: formattedInstructions,
         });
-        if (pUsers.length > 0) {
-          await broadcastNewTaskAlert(pUsers, {
-            taskId: task.id,
-            title,
-            rewardInr,
-            instructions: formattedInstructions,
-          });
-        }
-      } catch (err) {
-        console.error("Task alert broadcast error:", err);
       }
-    })();
+    } catch (err) {
+      console.error("Task alert broadcast error:", err);
+    }
 
     return NextResponse.json(
       { task: { ...task, targetRating: finalRating, dailyLimit: finalDailyLimit } },
