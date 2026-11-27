@@ -45,23 +45,23 @@ function LoginContent() {
               <div className="absolute -inset-1 bg-gradient-to-r from-blue-500/20 to-emerald-500/20 rounded-2xl blur-md group-hover:blur-lg transition-all" />
               <img
                 src="/logo.png"
-                alt="ReviewReward Logo"
+                alt="EarnReward Logo"
                 className="relative h-20 w-20 object-contain rounded-2xl shadow-md border border-slate-200 bg-white p-1.5 transition-transform group-hover:scale-105"
               />
             </div>
           </Link>
           <h1 className="text-3xl font-black tracking-tight text-slate-900">
-            Review<span className="text-blue-600">Reward</span>
+            Earn<span className="text-blue-600">Reward</span>
           </h1>
           <p className="text-xs text-slate-500">
-            Earn ₹10 per review. Transfer with ₹0 fees. Fast ₹100 bank payouts.
+            Earn ₹10 per task. Transfer with ₹0 fees. Fast ₹100 bank payouts.
           </p>
         </div>
 
         {/* Login Card */}
         <div className="glare-card rounded-3xl p-7 sm:p-8 space-y-6 bg-white border border-slate-200 shadow-xl shadow-blue-900/5">
           <div className="space-y-1">
-            <h2 className="text-base font-bold text-slate-900 font-mono uppercase tracking-wider">Access Terminal</h2>
+            <h2 className="text-base font-bold text-slate-900 font-mono uppercase tracking-wider">User Portal</h2>
             <p className="text-xs text-slate-500">
               Sign in to access your available tasks and web wallet.
             </p>
@@ -152,7 +152,7 @@ function LoginContent() {
           <div className="pt-4 border-t border-slate-100 space-y-2.5 text-xs text-slate-700">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-              <span>Strict 1 review per shop per account</span>
+              <span>Strict 1 completion per task per account</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />

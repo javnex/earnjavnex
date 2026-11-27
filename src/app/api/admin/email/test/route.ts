@@ -20,8 +20,8 @@ export async function POST(req: Request) {
 
     const fromAddress =
       senderType === "payments"
-        ? getEnv("PAYMENTS_FROM_EMAIL") || "ReviewReward Payouts <payments@javnex.in>"
-        : getEnv("TASKS_FROM_EMAIL") || "ReviewReward Tasks <task@javnex.in>";
+        ? getEnv("PAYMENTS_FROM_EMAIL") || "EarnReward Payouts <payments@javnex.in>"
+        : getEnv("TASKS_FROM_EMAIL") || "EarnReward Tasks <task@javnex.in>";
 
     const hasResend = !!getEnv("RESEND_API_KEY");
     const hasZepto = !!getEnv("ZEPTOMAIL_TOKEN");
@@ -38,10 +38,10 @@ export async function POST(req: Request) {
     const result = await sendHttpsEmail({
       from: fromAddress,
       to: targetEmail,
-      subject: `[Test] ReviewReward Live Email Verification (${senderType.toUpperCase()})`,
+      subject: `[Test] EarnReward Live Email Verification (${senderType.toUpperCase()})`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-          <h2 style="color: #2563eb; margin-top: 0;">ReviewReward Email Test Succeeded! 🎉</h2>
+          <h2 style="color: #2563eb; margin-top: 0;">EarnReward Email Test Succeeded! 🎉</h2>
           <p style="color: #475569; font-size: 14px; line-height: 1.6;">
             Your Cloudflare Worker HTTPS mailer is connected and functioning properly with your verified domain <strong>javnex.in</strong>.
           </p>

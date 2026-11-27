@@ -108,7 +108,7 @@ export default function GrievancePortalPage() {
             </div>
             <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl">
               <span className="text-slate-400 block text-[10px]">CONTACT EMAIL</span>
-              <span className="font-bold text-blue-600">grievance@reviewreward.in</span>
+              <span className="font-bold text-blue-600">grievance@EarnReward.in</span>
             </div>
           </div>
         </div>
@@ -244,7 +244,7 @@ export default function GrievancePortalPage() {
 
       <footer className="border-t border-slate-200 bg-white py-8 text-center text-xs text-slate-500 font-mono mt-16">
         <div className="max-w-4xl mx-auto px-4 space-y-2">
-          <p>© 2026 ReviewReward. All rights reserved. India DPDP Act 2023 Compliant.</p>
+          <p>© 2026 EarnReward. All rights reserved. India DPDP Act 2023 Compliant.</p>
           <div className="flex justify-center gap-4 text-slate-600">
             <Link href="/privacy" className="hover:text-blue-600 hover:underline">Privacy Notice</Link>
             <span>•</span>

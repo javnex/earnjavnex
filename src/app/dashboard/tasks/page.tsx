@@ -103,7 +103,7 @@ export default function TasksPage() {
   ) => {
     const proofLink = proofInputs[taskId]?.trim();
     if (!proofLink) {
-      setMessage({ type: "error", text: "Please paste your public review proof link." });
+      setMessage({ type: "error", text: "Please paste your public task proof link." });
       return;
     }
 
@@ -131,7 +131,7 @@ export default function TasksPage() {
 
       setMessage({
         type: "success",
-        text: data.message || "Review submitted successfully! ₹10 credited to your wallet.",
+        text: data.message || "Task submitted successfully! ₹10 credited to your wallet.",
       });
 
       // Clear input
@@ -175,10 +175,10 @@ export default function TasksPage() {
         <div>
           <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2.5">
             <ListTodo className="h-6 w-6 text-blue-600" />
-            <span>Available Review Tasks</span>
+            <span>Available Tasks</span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Complete assigned store reviews, paste your proof link, and earn ₹10 instantly in your web wallet.
+            Complete assigned tasks, paste your proof link, and earn ₹10 instantly in your web wallet.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -244,7 +244,7 @@ export default function TasksPage() {
       {/* Tasks List */}
       {loading ? (
         <div className="glare-card rounded-2xl p-12 text-center text-slate-400 font-mono text-xs animate-pulse bg-white border border-slate-200">
-          Loading active review listings...
+          Loading active task listings...
         </div>
       ) : tasks.length === 0 ? (
         <div className="glare-card rounded-2xl p-12 text-center space-y-3 bg-white border border-slate-200">

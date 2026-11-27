@@ -27,9 +27,9 @@ export interface TaskAlertEmailPayload {
 }
 
 const PAYMENTS_FROM_EMAIL =
-  getEnv("PAYMENTS_FROM_EMAIL") || "ReviewReward Payouts <payments@javnex.in>";
+  getEnv("PAYMENTS_FROM_EMAIL") || "EarnReward Payouts <payments@javnex.in>";
 const TASKS_FROM_EMAIL =
-  getEnv("TASKS_FROM_EMAIL") || "ReviewReward Tasks <task@javnex.in>";
+  getEnv("TASKS_FROM_EMAIL") || "EarnReward Tasks <task@javnex.in>";
 const REPLY_TO_EMAIL =
   getEnv("REPLY_TO_EMAIL") || "info@javnex.in";
 const APP_URL =
@@ -179,14 +179,14 @@ export async function sendWithdrawalConfirmationEmail(
       : `https://bscscan.com/tx/${txHash}`
     : null;
 
-  const subject = `Payout Completed: ${usdtAmount} USDT (₹${amountInr.toFixed(0)}) - ReviewReward`;
+  const subject = `Payout Completed: ${usdtAmount} USDT (₹${amountInr.toFixed(0)}) - EarnReward`;
 
   const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>ReviewReward Payout Completed</title>
+  <title>EarnReward Payout Completed</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 24px 12px; }
     .card { max-width: 580px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
@@ -205,7 +205,7 @@ export async function sendWithdrawalConfirmationEmail(
 <body>
   <div class="card">
     <div class="header">
-      <h1 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">ReviewReward</h1>
+      <h1 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">EarnReward</h1>
       <p style="margin: 6px 0 0 0; font-size: 13px; opacity: 0.9;">Official Blockchain Payout Receipt</p>
     </div>
 
@@ -249,7 +249,7 @@ export async function sendWithdrawalConfirmationEmail(
     </div>
 
     <div class="footer">
-      <p style="margin: 0 0 6px 0;">&copy; 2026 ReviewReward (earn.javnex.in). All rights reserved.</p>
+      <p style="margin: 0 0 6px 0;">&copy; 2026 EarnReward (earn.javnex.in). All rights reserved.</p>
       <p style="margin: 0; color: #94a3b8;">Sent via automated payment gateway. Replies routed to ${REPLY_TO_EMAIL}</p>
     </div>
   </div>
@@ -275,13 +275,13 @@ export async function sendNewTaskAlertEmail(
   payload: TaskAlertEmailPayload
 ): Promise<boolean> {
   const {
-    userName = "Valued Reviewer",
+    userName = "Valued Member",
     title,
     rewardInr,
     instructions,
   } = payload;
 
-  const subject = `New Task Available: Earn ₹${rewardInr.toFixed(0)} on ReviewReward`;
+  const subject = `New Task Available: Earn ₹${rewardInr.toFixed(0)} on EarnReward`;
   const taskUrl = `${APP_URL}/dashboard/tasks`;
   const unsubscribeUrl = `${APP_URL}/unsubscribe?email=${encodeURIComponent(toEmail)}`;
 
@@ -290,7 +290,7 @@ export async function sendNewTaskAlertEmail(
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>New Micro-Task Alert</title>
+  <title>New Task Alert</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 24px 12px; }
     .card { max-width: 580px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
@@ -306,14 +306,14 @@ export async function sendNewTaskAlertEmail(
 <body>
   <div class="card">
     <div class="header">
-      <h1 style="margin: 0; font-size: 24px; font-weight: 800;">ReviewReward</h1>
-      <p style="margin: 6px 0 0 0; font-size: 13px; opacity: 0.9;">New Verified Shop Review Task</p>
+      <h1 style="margin: 0; font-size: 24px; font-weight: 800;">EarnReward</h1>
+      <p style="margin: 6px 0 0 0; font-size: 13px; opacity: 0.9;">New Verified Task Available</p>
     </div>
 
     <div class="content">
       <h2 style="font-size: 18px; color: #0f172a; margin-top: 0;">Hi ${userName},</h2>
       <p style="font-size: 14px; line-height: 1.6; color: #334155;">
-        A new verified shop review task has just been published on your ReviewReward terminal!
+        A new verified task has just been published on your EarnReward dashboard!
       </p>
 
       <div class="task-card">
@@ -333,7 +333,7 @@ export async function sendNewTaskAlertEmail(
     </div>
 
     <div class="footer">
-      <p style="margin: 0 0 6px 0;">&copy; 2026 ReviewReward (earn.javnex.in). All rights reserved.</p>
+      <p style="margin: 0 0 6px 0;">&copy; 2026 EarnReward (earn.javnex.in). All rights reserved.</p>
       <p style="margin: 0; color: #94a3b8;">
         You received this because task alerts are enabled in your account.
         <br />

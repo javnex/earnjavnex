@@ -22,23 +22,23 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   referrer: "no-referrer",
   title: {
-    default: "ReviewReward - Earn ₹100+ Reviewing Online Shops | Fast ₹100 Payouts",
-    template: "%s | ReviewReward",
+    default: "EarnReward - Earn ₹100+ by Completing Tasks | Fast ₹100 Payouts",
+    template: "%s | EarnReward",
   },
   description:
-    "Earn ₹10 per verified shop review. Pool balances across multiple accounts with ₹0-fee internal transfers and cash out directly once your wallet hits ₹100. Compliant with India DPDP Act 2023.",
+    "Earn ₹10 per verified task. Pool balances across multiple accounts with ₹0-fee internal transfers and cash out directly once your wallet hits ₹100. Compliant with India DPDP Act 2023.",
   keywords: [
-    "review rewards",
-    "micro-task terminal",
+    "task rewards",
+    "micro-task platform",
     "earn money online india",
-    "shop review tasks",
+    "online tasks",
     "zero fee internal transfers",
     "fast 100 payouts",
     "DPDP compliant task platform",
   ],
-  authors: [{ name: "ReviewReward Team" }],
-  creator: "ReviewReward",
-  publisher: "ReviewReward",
+  authors: [{ name: "EarnReward Team" }],
+  creator: "EarnReward",
+  publisher: "EarnReward",
   formatDetection: {
     email: false,
     address: false,
@@ -48,19 +48,19 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   openGraph: {
-    title: "ReviewReward - Earn ₹100+ Reviewing Online Shops | Fast ₹100 Payouts",
+    title: "EarnReward - Earn ₹100+ by Completing Tasks | Fast ₹100 Payouts",
     description:
-      "Earn ₹10 per verified review. Zero-fee account pooling transfers. Automated fast ₹100 cashouts directly to your bank account.",
+      "Earn ₹10 per verified task. Zero-fee account pooling transfers. Automated fast ₹100 cashouts directly to your bank account.",
     url: siteUrl,
-    siteName: "ReviewReward",
+    siteName: "EarnReward",
     locale: "en_IN",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "ReviewReward - Earn ₹100+ Reviewing Online Shops",
+    title: "EarnReward - Earn ₹100+ by Completing Tasks",
     description:
-      "Earn ₹10 per verified review. Pool balances with ₹0 fees. Fast ₹100 cashouts.",
+      "Earn ₹10 per verified task. Pool balances with ₹0 fees. Fast ₹100 cashouts.",
   },
   robots: {
     index: true,

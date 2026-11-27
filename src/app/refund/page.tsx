@@ -3,9 +3,9 @@ import { ArrowLeft, Wallet, CheckCircle2, ShieldAlert, Zap, RefreshCw } from "lu
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Refund, Withdrawal & Payout Policy - ReviewReward",
+  title: "Refund, Withdrawal & Payout Policy - EarnReward",
   description:
-    "Official payout, withdrawal, and refund policy for ReviewReward micro-tasks, Polygon USDT disbursements, 6% cash-out buffer, and failed transaction handling.",
+    "Official payout, withdrawal, and refund policy for EarnReward micro-tasks, Polygon USDT disbursements, 6% cash-out buffer, and failed transaction handling.",
 };
 
 export default function RefundPolicyPage() {
@@ -49,7 +49,7 @@ export default function RefundPolicyPage() {
               <span>Nature of Task Earnings</span>
             </h2>
             <p>
-              Credits stored in your ReviewReward web wallet represent earned micro-task rewards denominated in Indian Rupees (INR) at the fixed rate of ₹10.00 INR per verified review task. These balances are not deposits, banking balances, or securities.
+              Credits stored in your EarnReward web wallet represent earned micro-task rewards denominated in Indian Rupees (INR) at the fixed rate of ₹10.00 INR per verified task. These balances are not deposits, banking balances, or securities.
             </p>
           </section>
 
@@ -76,7 +76,7 @@ export default function RefundPolicyPage() {
             <div className="glass-panel p-4 rounded-xl space-y-2 font-mono text-xs bg-emerald-50/70 border border-emerald-200 text-emerald-950">
               <div className="font-bold text-emerald-900">How the 6% Buffer Works:</div>
               <p className="text-emerald-800">
-                On every ₹100 withdrawal requested, ReviewReward automatically adds a 6% buffer, sending approximately <strong>₹106 worth of USDT</strong>. When you sell this USDT on an Indian exchange, you receive the full ₹100+ net credit directly into your Indian bank account without out-of-pocket losses.
+                On every ₹100 withdrawal requested, EarnReward automatically adds a 6% buffer, sending approximately <strong>₹106 worth of USDT</strong>. When you sell this USDT on an Indian exchange, you receive the full ₹100+ net credit directly into your Indian bank account without out-of-pocket losses.
               </p>
             </div>
           </section>
@@ -104,7 +104,7 @@ export default function RefundPolicyPage() {
               <span>Blockchain Finality & Irreversibility</span>
             </h2>
             <p>
-              Cryptocurrency transactions dispatched on the Polygon network are permanent and immutable. Once a payout transaction hash (<code>txHash</code>) is generated and confirmed on PolygonScan, the transaction cannot be reversed, recalled, or modified by ReviewReward. Users bear full responsibility for supplying an accurate, EVM-compatible Polygon wallet address.
+              Cryptocurrency transactions dispatched on the Polygon network are permanent and immutable. Once a payout transaction hash (<code>txHash</code>) is generated and confirmed on PolygonScan, the transaction cannot be reversed, recalled, or modified by EarnReward. Users bear full responsibility for supplying an accurate, EVM-compatible Polygon wallet address.
             </p>
           </section>
         </div>
@@ -112,7 +112,7 @@ export default function RefundPolicyPage() {
 
       <footer className="border-t border-slate-200 bg-white py-8 text-center text-xs text-slate-500 font-mono mt-16">
         <div className="max-w-4xl mx-auto px-4 space-y-2">
-          <p>© 2026 ReviewReward. All rights reserved.</p>
+          <p>© 2026 EarnReward. All rights reserved.</p>
           <div className="flex justify-center gap-4 text-slate-500">
             <Link href="/privacy" className="hover:text-blue-600">Privacy Notice</Link>
             <span>•</span>

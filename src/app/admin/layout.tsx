@@ -47,7 +47,7 @@ export default async function AdminLayout({
           <Link href="/admin" className="flex items-center gap-2.5 group">
             <img
               src="/logo.png"
-              alt="ReviewReward Admin"
+              alt="EarnReward Admin"
               className="h-9 w-9 object-contain drop-shadow-sm transition-transform group-hover:scale-105"
             />
             <div>

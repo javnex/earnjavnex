@@ -3,9 +3,9 @@ import { FileText, ArrowLeft, ShieldCheck, CheckCircle2, AlertOctagon } from "lu
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service - ReviewReward | Micro-Task Platform Rules",
+  title: "Terms of Service - EarnReward | Micro-Task Platform Rules",
   description:
-    "Official Terms and Conditions for ReviewReward platform governing review tasks, internal wallet transfers, Polygon USDT payouts, and account rules.",
+    "Official Terms and Conditions for EarnReward platform governing micro-tasks, internal wallet transfers, Polygon USDT payouts, and account rules.",
 };
 
 export default function TermsPage() {
@@ -48,7 +48,7 @@ export default function TermsPage() {
               <span>Acceptance of Agreement</span>
             </h2>
             <p>
-              By accessing, browsing, or authenticating into ReviewReward (&quot;Platform&quot;), you acknowledge that you have read, understood, and agreed to be bound by these Terms of Service and our statutory Privacy Notice. If you do not agree with any part of these terms, you must discontinue platform use immediately.
+              By accessing, browsing, or authenticating into EarnReward (&quot;Platform&quot;), you acknowledge that you have read, understood, and agreed to be bound by these Terms of Service and our statutory Privacy Notice. If you do not agree with any part of these terms, you must discontinue platform use immediately.
             </p>
           </section>
 
@@ -68,10 +68,10 @@ export default function TermsPage() {
           <section className="glare-card rounded-2xl p-6 sm:p-7 space-y-3 bg-white border border-slate-200">
             <h2 className="text-base font-bold text-slate-900 font-mono flex items-center gap-2">
               <span className="text-blue-600 font-bold">03.</span>
-              <span>Review Task Rules & Quota Control</span>
+              <span>task Rules & Quota Control</span>
             </h2>
             <p>
-              ReviewReward connects users to active shop tasks with strict programmatic constraints:
+              EarnReward connects users to active shop tasks with strict programmatic constraints:
             </p>
             <ul className="list-disc pl-5 space-y-2 text-slate-600 text-xs">
               <li><strong className="text-slate-900 font-mono">Strict 1 Review per Shop per Account:</strong> Each user account may submit at most one verified review per shop task listing. Multiple submissions to the same shop task from the same account are blocked.</li>
@@ -107,7 +107,7 @@ export default function TermsPage() {
             </p>
             <ul className="list-disc pl-5 space-y-2 text-slate-600 text-xs">
               <li><strong className="text-slate-900 font-mono">Minimum Threshold:</strong> The minimum withdrawal amount is ₹100 INR (equivalent to 10 verified tasks).</li>
-              <li><strong className="text-slate-900 font-mono">6% Bank Cash-Out Buffer:</strong> To protect users against Indian crypto exchange trading spreads and the statutory 1% TDS when converting USDT to INR, ReviewReward automatically adds a 6% bonus (disbursing ~₹106 worth of USDT for every ₹100 requested).</li>
+              <li><strong className="text-slate-900 font-mono">6% Bank Cash-Out Buffer:</strong> To protect users against Indian crypto exchange trading spreads and the statutory 1% TDS when converting USDT to INR, EarnReward automatically adds a 6% bonus (disbursing ~₹106 worth of USDT for every ₹100 requested).</li>
               <li><strong className="text-slate-900 font-mono">Address Accuracy:</strong> Users must supply an authentic 42-character Polygon EVM wallet address. Because blockchain transactions are immutable, disbursements sent to incorrect or non-EVM addresses cannot be recovered or refunded.</li>
             </ul>
           </section>
@@ -136,7 +136,7 @@ export default function TermsPage() {
 
       <footer className="border-t border-slate-200 bg-white py-8 text-center text-xs text-slate-500 font-mono mt-16">
         <div className="max-w-4xl mx-auto px-4 space-y-2">
-          <p>© 2026 ReviewReward. All rights reserved.</p>
+          <p>© 2026 EarnReward. All rights reserved.</p>
           <div className="flex justify-center gap-4 text-slate-500">
             <Link href="/privacy" className="hover:text-blue-600">Privacy Notice</Link>
             <span>•</span>

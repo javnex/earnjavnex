@@ -52,11 +52,11 @@ export default function Navbar() {
           <Link href="/dashboard" className="flex items-center gap-2 group shrink-0">
             <img
               src="/logo.png"
-              alt="ReviewReward"
+              alt="EarnReward"
               className="h-9 w-9 sm:h-10 sm:w-10 object-contain transition-transform group-hover:scale-105"
             />
             <span className="text-base sm:text-lg font-black tracking-tight text-slate-900">
-              Review<span className="text-blue-600">Reward</span>
+              Earn<span className="text-blue-600">Reward</span>
             </span>
           </Link>
 

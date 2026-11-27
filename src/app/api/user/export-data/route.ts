@@ -46,7 +46,7 @@ export async function GET(req: Request) {
 
     const exportPayload = {
       exportMetadata: {
-        platform: "ReviewReward",
+        platform: "EarnReward",
         statutoryAuthority: "Digital Personal Data Protection Act, 2023 (Section 11)",
         exportedAt: new Date().toISOString(),
         dataPrincipalEmail: userEmail,
@@ -61,7 +61,7 @@ export async function GET(req: Request) {
       status: 200,
       headers: {
         "Content-Type": "application/json",
-        "Content-Disposition": `attachment; filename="reviewreward-datapackage-${user?.userCode || "USR"}.json"`,
+        "Content-Disposition": `attachment; filename="earnreward-datapackage-${user?.userCode || "USR"}.json"`,
       },
     });
   } catch (error: any) {

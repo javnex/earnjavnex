@@ -3,7 +3,7 @@ import { ShieldCheck, ArrowLeft, Lock, FileText, UserCheck, AlertTriangle } from
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Notice - ReviewReward | India DPDP Act 2023 Compliant",
+  title: "Privacy Notice - EarnReward | India DPDP Act 2023 Compliant",
   description:
     "Official Privacy Notice under India's Digital Personal Data Protection Act, 2023 and DPDP Rules, 2025 detailing data processing, retention, user rights, and grievance redressal.",
 };
@@ -53,7 +53,7 @@ export default function PrivacyPolicyPage() {
               <span>Data Fiduciary Identity & Overview</span>
             </h2>
             <p>
-              This Privacy Notice is issued by <strong>ReviewReward</strong> (&quot;Platform&quot;, &quot;we&quot;, &quot;us&quot;, or &quot;Data Fiduciary&quot;) in compliance with the <strong>Digital Personal Data Protection Act, 2023 (DPDP Act)</strong> and the <strong>Digital Personal Data Protection Rules, 2025</strong> enacted by the Government of India.
+              This Privacy Notice is issued by <strong>EarnReward</strong> (&quot;Platform&quot;, &quot;we&quot;, &quot;us&quot;, or &quot;Data Fiduciary&quot;) in compliance with the <strong>Digital Personal Data Protection Act, 2023 (DPDP Act)</strong> and the <strong>Digital Personal Data Protection Rules, 2025</strong> enacted by the Government of India.
             </p>
             <p>
               We operate an audited micro-task web terminal enabling registered users (&quot;Data Principals&quot;) to complete verified online shop reviews, accumulate reward credits in an internal web wallet, transfer balances between accounts, and receive automated cryptocurrency disbursements in Tether (Polygon USDT).
@@ -89,7 +89,7 @@ export default function PrivacyPolicyPage() {
             </p>
             <ul className="list-disc pl-5 space-y-1.5 text-slate-600 text-xs font-mono">
               <li>Authenticating your account securely via OAuth 2.0 without storing plaintext passwords.</li>
-              <li>Verifying review task submissions against shop task limits and organic rating balance distributions.</li>
+              <li>Verifying task submissions against shop task limits and organic rating balance distributions.</li>
               <li>Crediting ₹10 INR task rewards and maintaining an unalterable wallet ledger.</li>
               <li>Facilitating zero-fee peer-to-peer transfers between accounts.</li>
               <li>Executing automated blockchain withdrawals via NOWPayments Polygon POS network.</li>
@@ -167,7 +167,7 @@ export default function PrivacyPolicyPage() {
               <span>Protection of Children&apos;s Data</span>
             </h2>
             <p>
-              ReviewReward is strictly designed and intended for individuals aged <strong>18 years or older</strong> who possess legal capacity to enter into agreements and manage digital asset transactions. We do not knowingly collect, process, or track digital personal data belonging to children or minors under 18 years of age. Accounts identified as belonging to minors will be closed and their data erased immediately.
+              EarnReward is strictly designed and intended for individuals aged <strong>18 years or older</strong> who possess legal capacity to enter into agreements and manage digital asset transactions. We do not knowingly collect, process, or track digital personal data belonging to children or minors under 18 years of age. Accounts identified as belonging to minors will be closed and their data erased immediately.
             </p>
           </section>
 
@@ -178,12 +178,12 @@ export default function PrivacyPolicyPage() {
               <span>Grievance Officer & Statutory Redressal Mechanism</span>
             </h2>
             <p>
-              In compliance with Section 13 of the DPDP Act and the DPDP Rules, 2025, ReviewReward has appointed a designated Grievance Officer:
+              In compliance with Section 13 of the DPDP Act and the DPDP Rules, 2025, EarnReward has appointed a designated Grievance Officer:
             </p>
             <div className="glass-panel p-4 rounded-xl space-y-1.5 font-mono text-xs bg-slate-50 border border-slate-200">
               <div className="text-slate-900 font-bold">Designated Grievance Officer: Legal & Data Protection Desk</div>
-              <div className="text-slate-600">Entity: ReviewReward Platform</div>
-              <div className="text-slate-600">Email: <a href="mailto:grievance@reviewreward.in" className="text-blue-600 underline font-bold">grievance@reviewreward.in</a></div>
+              <div className="text-slate-600">Entity: EarnReward Platform</div>
+              <div className="text-slate-600">Email: <a href="mailto:grievance@EarnReward.in" className="text-blue-600 underline font-bold">grievance@EarnReward.in</a></div>
               <div className="text-slate-600">Jurisdiction: India</div>
               <div className="text-slate-600">Statutory Response Window: Acknowledgment within 48 hours; resolution within prescribed DPDP timelines.</div>
             </div>
@@ -202,7 +202,7 @@ export default function PrivacyPolicyPage() {
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white py-8 text-center text-xs text-slate-500 font-mono mt-16">
         <div className="max-w-4xl mx-auto px-4 space-y-2">
-          <p>© 2026 ReviewReward. All rights reserved. India DPDP Act 2023 Compliant.</p>
+          <p>© 2026 EarnReward. All rights reserved. India DPDP Act 2023 Compliant.</p>
           <div className="flex justify-center gap-4 text-slate-500">
             <Link href="/terms" className="hover:text-blue-600">Terms of Service</Link>
             <span>•</span>

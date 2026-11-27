@@ -22,12 +22,12 @@ export default function HomePage() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "WebApplication",
-    name: "ReviewReward",
+    name: "EarnReward",
     applicationCategory: "BusinessApplication",
     operatingSystem: "All",
     browserRequirements: "Requires JavaScript. Requires HTML5.",
     description:
-      "Micro-task platform for Indian users to review verified shops, earn ₹10 per review, pool balances across secondary accounts with zero fees, and cash out ₹100 directly to Indian bank accounts.",
+      "Micro-task platform for Indian users to complete verified tasks, earn ₹10 per task, pool balances across secondary accounts with zero fees, and cash out ₹100 directly to Indian bank accounts.",
     offers: {
       "@type": "Offer",
       price: "0",
@@ -35,7 +35,7 @@ export default function HomePage() {
     },
     provider: {
       "@type": "Organization",
-      name: "ReviewReward",
+      name: "EarnReward",
       url: "https://earn.javnex.in",
     },
   };
@@ -55,14 +55,14 @@ export default function HomePage() {
       <header className="border-b border-slate-200/90 bg-white/90 backdrop-blur-xl sticky top-0 z-50 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Brand Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group" aria-label="ReviewReward Homepage">
+          <Link href="/" className="flex items-center gap-2.5 group" aria-label="EarnReward Homepage">
             <img
               src="/logo.png"
-              alt="ReviewReward Logo"
+              alt="EarnReward Logo"
               className="h-10 w-10 object-contain rounded-xl shadow-xs transition-transform group-hover:scale-105"
             />
             <span className="text-xl font-black tracking-tight text-slate-900">
-              Review<span className="text-blue-600">Reward</span>
+              Earn<span className="text-blue-600">Reward</span>
             </span>
           </Link>
 
@@ -103,182 +103,91 @@ export default function HomePage() {
 
       {/* Hero Section */}
       <main className="flex-1" id="main-content">
-        <section className="relative overflow-hidden pt-10 pb-16 sm:pt-16 sm:pb-24">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <section className="relative overflow-hidden pt-12 pb-16 sm:pt-20 sm:pb-24">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center space-y-7">
             
-            {/* Desktop Two-Column Split Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
-              
-              {/* Left Column: Heading, Value Prop, CTAs */}
-              <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-                
-                {/* Live Terminal Pill */}
-                <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50/80 px-4 py-1.5 text-xs font-bold text-blue-800 shadow-xs backdrop-blur-md">
-                  <span className="flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse" />
-                  <span>Micro-Task Terminal for Indian Users</span>
-                  <span className="text-blue-300">•</span>
-                  <span className="text-emerald-700 font-extrabold">₹10 INR / Verified Review</span>
-                </div>
+            {/* Pill */}
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50/80 px-4 py-1.5 text-xs font-bold text-blue-800 shadow-xs backdrop-blur-md mx-auto">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse" />
+              <span>Micro-Task Platform for Indian Users</span>
+              <span className="text-blue-300">•</span>
+              <span className="text-emerald-700 font-extrabold">₹10 INR / Verified Task</span>
+            </div>
 
-                {/* Main Headline */}
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 leading-[1.12]">
-                  Earn ₹100+{" "}
-                  <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 bg-clip-text text-transparent">
-                    Reviewing Online Shops
-                  </span>
-                </h1>
+            {/* Main Headline */}
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 leading-[1.12]">
+              Earn ₹100+{" "}
+              <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 bg-clip-text text-transparent">
+                Completing Simple Tasks
+              </span>
+            </h1>
 
-                {/* Subtitle */}
-                <p className="text-lg sm:text-xl font-bold text-slate-700">
-                  ~2 Mins Per Task · Repeat Across Live Shops · Fast ₹100 Payouts
-                </p>
+            {/* Subtitle */}
+            <p className="text-lg sm:text-xl font-bold text-slate-700 max-w-2xl mx-auto">
+              ~2 Mins Per Task · Repeat Across Available Tasks · Fast ₹100 Payouts
+            </p>
 
-                {/* Description */}
-                <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto lg:mx-0">
-                  Quick one-time setup, then earn ₹10 per verified review across available shops and cash out once your wallet hits ₹100 with zero bank delays.
-                </p>
+            {/* Description */}
+            <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto">
+              Quick one-time setup, then earn ₹10 per verified task and cash out once your wallet hits ₹100 with zero bank delays.
+            </p>
 
-                {/* Hero Feature Badges */}
-                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2.5 pt-1">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-white text-xs font-bold text-blue-800 shadow-xs">
-                    <Sparkles className="h-3.5 w-3.5 text-blue-600" />
-                    <span>~2 Min Tasks</span>
-                  </div>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-white text-xs font-bold text-emerald-800 shadow-xs">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                    <span>10 Shops = ₹100 Payout</span>
-                  </div>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 bg-white text-xs font-bold text-indigo-800 shadow-xs">
-                    <Zap className="h-3.5 w-3.5 text-indigo-600" />
-                    <span>Instant Wallet Credit</span>
-                  </div>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 shadow-xs">
-                    <ArrowRightLeft className="h-3.5 w-3.5 text-blue-600" />
-                    <span>₹0 Fee P2P Pooling</span>
-                  </div>
-                </div>
-
-                {/* CTA Buttons */}
-                <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5 pt-2">
-                  <Link
-                    href="/auth/login"
-                    className="btn-futuristic w-full sm:w-auto flex items-center justify-center gap-2.5 rounded-2xl px-8 py-4 text-sm font-black text-white shadow-xl shadow-blue-500/25 transition-all cursor-pointer"
-                  >
-                    <span>Get Started Now</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-
-                  <a
-                    href="#how-it-works"
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 bg-white border border-slate-200 hover:border-blue-300 hover:text-blue-600 shadow-xs transition-all"
-                  >
-                    <span>How It Works</span>
-                    <ChevronRight className="h-4 w-4 text-slate-400" />
-                  </a>
-                </div>
-
-                {/* Trust Footer line */}
-                <div className="flex items-center justify-center lg:justify-start gap-4 text-xs text-slate-500 font-medium pt-2">
-                  <span className="flex items-center gap-1">
-                    <ShieldCheck className="h-4 w-4 text-emerald-600" /> DPDP Act 2023 Compliant
-                  </span>
-                  <span>•</span>
-                  <span>100% Automated Fast Payouts</span>
-                </div>
+            {/* Hero Feature Badges */}
+            <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-white text-xs font-bold text-blue-800 shadow-xs">
+                <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+                <span>~2 Min Tasks</span>
               </div>
-
-              {/* Right Column: Interactive Terminal Preview (Fills Desktop Space) */}
-              <div className="lg:col-span-5 relative mt-6 lg:mt-0">
-                <div className="glare-card rounded-3xl p-6 sm:p-7 bg-white/95 border border-slate-200/90 shadow-2xl relative overflow-hidden space-y-5">
-                  {/* Card Header */}
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                    <div className="flex items-center gap-2.5">
-                      <div className="h-3 w-3 rounded-full bg-emerald-500 animate-ping" />
-                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600">
-                        Live Terminal
-                      </span>
-                    </div>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
-                      ₹10.00 / Task
-                    </span>
-                  </div>
-
-                  {/* Sample Task 1 */}
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-0.5">
-                        <span className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
-                          <Building className="h-3.5 w-3.5 text-blue-600" />
-                          Aura Trends & Lifestyle
-                        </span>
-                        <p className="text-[11px] text-slate-500 font-medium">Google Maps Verified Shop</p>
-                      </div>
-                      <span className="text-xs font-black text-emerald-600 bg-emerald-100/70 px-2 py-0.5 rounded-lg">
-                        +₹10.00
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-1 text-[11px]">
-                      <div className="flex items-center gap-1 text-amber-500">
-                        <Star className="h-3.5 w-3.5 fill-current" />
-                        <Star className="h-3.5 w-3.5 fill-current" />
-                        <Star className="h-3.5 w-3.5 fill-current" />
-                        <Star className="h-3.5 w-3.5 fill-current" />
-                        <Star className="h-3.5 w-3.5 fill-current" />
-                        <span className="text-slate-500 font-semibold ml-1">5-Star Task</span>
-                      </div>
-                      <span className="text-slate-400 font-mono">~2 mins</span>
-                    </div>
-                  </div>
-
-                  {/* Multi-Account Pooling Box */}
-                  <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-200/70 space-y-3">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-700 flex items-center gap-1.5">
-                        <Wallet className="h-3.5 w-3.5 text-blue-600" />
-                        Wallet Cashout Progress
-                      </span>
-                      <span className="font-mono font-extrabold text-blue-700">₹100 / ₹100 (100%)</span>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                      <div className="bg-gradient-to-r from-blue-600 to-emerald-500 h-full rounded-full w-full animate-pulse" />
-                    </div>
-
-                    <div className="flex items-center justify-between text-[11px] text-slate-600 pt-0.5">
-                      <span className="flex items-center gap-1">
-                        <ArrowRightLeft className="h-3 w-3 text-emerald-600" />
-                        Multi-Account Pool: <strong className="text-slate-800">₹0 Fee</strong>
-                      </span>
-                      <span className="text-emerald-700 font-extrabold">Ready to Cash Out! 🚀</span>
-                    </div>
-                  </div>
-
-                  {/* Quick Cashout Box */}
-                  <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <span className="text-[11px] font-bold text-emerald-800 block">
-                        Direct Bank & IMPS Transfer
-                      </span>
-                      <span className="text-[10px] text-emerald-600">Guaranteed ₹100+ net credit</span>
-                    </div>
-                    <span className="text-xs font-black text-emerald-700 bg-white px-2.5 py-1 rounded-lg border border-emerald-300 shadow-xs">
-                      Instant Payout
-                    </span>
-                  </div>
-                </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-white text-xs font-bold text-emerald-800 shadow-xs">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                <span>10 Tasks = ₹100 Payout</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 bg-white text-xs font-bold text-indigo-800 shadow-xs">
+                <Zap className="h-3.5 w-3.5 text-indigo-600" />
+                <span>Instant Wallet Credit</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 shadow-xs">
+                <ArrowRightLeft className="h-3.5 w-3.5 text-blue-600" />
+                <span>₹0 Fee P2P Pooling</span>
               </div>
             </div>
 
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-2">
+              <Link
+                href="/auth/login"
+                className="btn-futuristic w-full sm:w-auto flex items-center justify-center gap-2.5 rounded-2xl px-8 py-4 text-sm font-black text-white shadow-xl shadow-blue-500/25 transition-all cursor-pointer"
+              >
+                <span>Get Started Now</span>
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+
+              <a
+                href="#how-it-works"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 bg-white border border-slate-200 hover:border-blue-300 hover:text-blue-600 shadow-xs transition-all"
+              >
+                <span>How It Works</span>
+                <ChevronRight className="h-4 w-4 text-slate-400" />
+              </a>
+            </div>
+
+            {/* Trust Footer line */}
+            <div className="flex items-center justify-center gap-4 text-xs text-slate-500 font-medium pt-2">
+              <span className="flex items-center gap-1">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" /> DPDP Act 2023 Compliant
+              </span>
+              <span>•</span>
+              <span>100% Automated Fast Payouts</span>
+            </div>
+
             {/* Key Trust Metrics Cards across full width */}
-            <div className="pt-16 sm:pt-20 grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 text-left" id="payouts">
+            <div className="pt-12 sm:pt-16 grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 text-left" id="payouts">
               <div className="glare-card rounded-2xl p-5 sm:p-6 space-y-1.5 bg-white border border-slate-200">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                  Reward Per Review
+                  Reward Per Task
                 </span>
                 <div className="text-2xl sm:text-3xl font-black text-emerald-600 tabular-nums">₹10.00</div>
-                <p className="text-xs text-slate-400">Credited instantly upon review proof</p>
+                <p className="text-xs text-slate-400">Credited instantly upon task verification</p>
               </div>
 
               <div className="glare-card rounded-2xl p-5 sm:p-6 space-y-1.5 bg-white border border-slate-200">
@@ -286,7 +195,7 @@ export default function HomePage() {
                   Minimum Payout
                 </span>
                 <div className="text-2xl sm:text-3xl font-black text-blue-600 tabular-nums">₹100 INR</div>
-                <p className="text-xs text-slate-400">Only 10 verified shop reviews needed</p>
+                <p className="text-xs text-slate-400">Only 10 verified tasks completed</p>
               </div>
 
               <div className="glare-card rounded-2xl p-5 sm:p-6 space-y-1.5 bg-white border border-slate-200">
@@ -316,7 +225,7 @@ export default function HomePage() {
                 Simple 3-Step Process
               </span>
               <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-                How ReviewReward Operates
+                How EarnReward Operates
               </h2>
               <p className="text-sm sm:text-base text-slate-500 max-w-2xl mx-auto">
                 High-credibility micro-task architecture engineered for Indian users.
@@ -329,9 +238,9 @@ export default function HomePage() {
                 <div className="h-12 w-12 rounded-2xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center font-black text-lg">
                   1
                 </div>
-                <h3 className="text-xl font-bold text-slate-900">Complete Shop Reviews</h3>
+                <h3 className="text-xl font-bold text-slate-900">Complete Available Tasks</h3>
                 <p className="text-sm text-slate-600 leading-relaxed font-sans">
-                  Open active shop links, post an authentic review with the assigned star rating, and submit your review proof link. Once verified, ₹10 is credited immediately to your web wallet. Tasks auto-close when the quota is reached.
+                  Open active task listings, complete the simple instruction, and submit your proof. Once verified, ₹10 is credited immediately to your web wallet. Tasks auto-close when the quota is reached.
                 </p>
               </div>
 
@@ -342,7 +251,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-xl font-bold text-slate-900">Pool Across Accounts (₹0 Fee)</h3>
                 <p className="text-sm text-slate-600 leading-relaxed font-sans">
-                  Strict policy permits 1 review per shop per account. If you own multiple accounts, complete the review on each and transfer your ₹10 earnings to your primary account with zero fees.
+                  Strict policy permits 1 submission per task per account. If you own multiple accounts, complete the task on each and transfer your ₹10 earnings to your primary account with zero fees.
                 </p>
               </div>
 
@@ -384,10 +293,10 @@ export default function HomePage() {
 
               <div className="glare-card rounded-2xl p-6 space-y-2 bg-white border border-slate-200">
                 <h3 className="text-base font-bold text-blue-900">
-                  How much can I earn per review?
+                  How much can I earn per task?
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                  You earn ₹10 INR for every verified review. With just 10 completed tasks, you reach the ₹100 withdrawal threshold.
+                  You earn ₹10 INR for every verified task. With just 10 completed tasks, you reach the ₹100 withdrawal threshold.
                 </p>
               </div>
 
@@ -396,7 +305,7 @@ export default function HomePage() {
                   Can I use multiple accounts to pool earnings?
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                  Yes! Each account can review each shop once. You can use multiple accounts and use our ₹0-fee internal wallet transfer to pool all earnings into your main account to reach the ₹100 withdrawal limit quickly.
+                  Yes! Each account can complete each task once. You can use multiple accounts and use our ₹0-fee internal wallet transfer to pool all earnings into your main account to reach the ₹100 withdrawal limit quickly.
                 </p>
               </div>
 
@@ -422,15 +331,15 @@ export default function HomePage() {
               <div className="flex items-center gap-2">
                 <img
                   src="/logo.png"
-                  alt="ReviewReward Logo"
+                  alt="EarnReward Logo"
                   className="h-8 w-8 object-contain rounded-lg shadow-xs"
                 />
                 <span className="font-bold text-slate-900 tracking-tight text-sm">
-                  Review<span className="text-blue-600">Reward</span>
+                  Earn<span className="text-blue-600">Reward</span>
                 </span>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Micro-task terminal providing Indian users with verified shop review rewards, zero-fee pooling transfers, and fast ₹100 bank withdrawals.
+                Micro-task platform providing Indian users with verified task rewards, zero-fee pooling transfers, and fast ₹100 bank withdrawals.
               </p>
               <div className="text-[11px] font-mono text-slate-400">
                 Operated in compliance with India DPDP Act, 2023.
@@ -445,7 +354,7 @@ export default function HomePage() {
               <ul className="space-y-2 text-slate-600 text-xs">
                 <li>
                   <Link href="/dashboard/tasks" className="hover:text-blue-600 transition-colors">
-                    Shop Review Tasks
+                    Available Tasks
                   </Link>
                 </li>
                 <li>
@@ -516,7 +425,7 @@ export default function HomePage() {
                 </li>
                 <li>
                   <span className="text-slate-500 block text-[11px]">
-                    Email: grievance@reviewreward.in
+                    Email: info@javnex.in
                   </span>
                 </li>
                 <li>
@@ -529,7 +438,7 @@ export default function HomePage() {
           </div>
 
           <div className="pt-8 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 font-mono">
-            <p>© 2026 ReviewReward. All rights reserved.</p>
+            <p>© 2026 EarnReward. All rights reserved.</p>
             <div className="flex items-center gap-4">
               <Link href="/privacy" className="hover:text-blue-600 transition-colors">
                 Privacy

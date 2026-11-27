@@ -43,7 +43,7 @@ export default function NotFound() {
         </div>
 
         <div className="pt-2 text-[11px] font-mono text-slate-400">
-          ReviewReward Security & Routing Gateway
+          EarnReward Security & Routing Gateway
         </div>
       </div>
     </div>

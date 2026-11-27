@@ -228,11 +228,11 @@ export default function DashboardPage() {
               <span>Multi-Account Pooling</span>
             </div>
             <p className="text-xs text-slate-700 leading-relaxed font-sans">
-              Each store listing allows 1 review per account. If you manage multiple accounts:
+              Each task allows 1 completion per account. If you manage multiple accounts:
             </p>
             <ol className="list-decimal list-inside text-xs text-slate-600 space-y-1.5 font-sans">
               <li>Sign in with Account 2, 3, etc.</li>
-              <li>Complete the shop review on each account.</li>
+              <li>Complete the task on each account.</li>
               <li>
                 Transfer the ₹10 reward to this primary ID with ₹0 fee.
               </li>
@@ -247,7 +247,7 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          {/* Recent Reviews Submitted */}
+          {/* Recent Task Submissions */}
           <div className="glare-card rounded-2xl p-5 space-y-3.5 border border-slate-200 bg-white">
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-mono flex items-center gap-2">
               <Clock className="h-4 w-4 text-slate-500" />
