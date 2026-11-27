@@ -19,6 +19,7 @@ model User {
   role            String           @default("USER") // "USER" | "ADMIN"
   walletBalance   Float            @default(0.0)
   isWithdrawing   Boolean          @default(false)
+  task_alerts_enabled Boolean       @default(true)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -95,6 +96,7 @@ model Withdrawal {
   txHash              String?
   status              String   @default("PROCESSING") // "PROCESSING" | "FINISHED" | "FAILED"
   errorMessage        String?
+  withdrawal_email_sent_at DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

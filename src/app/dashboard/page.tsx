@@ -15,6 +15,8 @@ import {
   Wallet,
   AlertCircle,
   Star,
+  Bell,
+  Mail,
 } from "lucide-react";
 
 interface Task {
@@ -44,13 +46,16 @@ export default function DashboardPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [recentSubmissions, setRecentSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [taskAlertsEnabled, setTaskAlertsEnabled] = useState(true);
+  const [updatingAlerts, setUpdatingAlerts] = useState(false);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [tasksRes, subsRes] = await Promise.all([
+      const [tasksRes, subsRes, prefsRes] = await Promise.all([
         fetch("/api/tasks"),
         fetch("/api/submissions"),
+        fetch("/api/user/preferences"),
       ]);
 
       if (tasksRes.ok) {
@@ -62,10 +67,38 @@ export default function DashboardPage() {
         const data = await subsRes.json();
         setRecentSubmissions(data.submissions || []);
       }
+
+      if (prefsRes.ok) {
+        const data = await prefsRes.json();
+        if (typeof data.task_alerts_enabled === "boolean") {
+          setTaskAlertsEnabled(data.task_alerts_enabled);
+        }
+      }
     } catch (err) {
       console.error("Dashboard data load error:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleAlerts = async () => {
+    const nextVal = !taskAlertsEnabled;
+    setTaskAlertsEnabled(nextVal);
+    setUpdatingAlerts(true);
+    try {
+      const res = await fetch("/api/user/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task_alerts_enabled: nextVal }),
+      });
+      if (!res.ok) {
+        // revert on error
+        setTaskAlertsEnabled(!nextVal);
+      }
+    } catch {
+      setTaskAlertsEnabled(!nextVal);
+    } finally {
+      setUpdatingAlerts(false);
     }
   };
 
@@ -260,6 +293,37 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Email Notification Preferences */}
+          <div className="glare-card rounded-2xl p-5 space-y-3 border border-slate-200 bg-white">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider font-mono flex items-center gap-2">
+                <Bell className="h-4 w-4 text-blue-600" />
+                <span>Task Email Alerts</span>
+              </h3>
+              <button
+                type="button"
+                onClick={handleToggleAlerts}
+                disabled={updatingAlerts}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  taskAlertsEnabled ? "bg-blue-600" : "bg-slate-200"
+                } ${updatingAlerts ? "opacity-50 cursor-wait" : ""}`}
+                role="switch"
+                aria-checked={taskAlertsEnabled}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                    taskAlertsEnabled ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500 font-mono leading-relaxed">
+              {taskAlertsEnabled
+                ? "You will receive email notifications when new tasks and shops are published."
+                : "Task alerts are paused. You will not receive emails for new task drops."}
+            </p>
           </div>
 
           {/* DPDP Act 2023 Statutory Data Rights */}

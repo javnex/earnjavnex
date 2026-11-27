@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { verifyNowpaymentsIpnSignature } from "@/lib/nowpayments";
-import { sendWithdrawalCompletedEmail } from "@/lib/email";
+import { sendWithdrawalConfirmationEmail } from "@/lib/mailer";
 
 // POST /api/webhooks/nowpayments
 export async function POST(req: Request) {
@@ -47,27 +48,48 @@ export async function POST(req: Request) {
     const normalizedStatus = String(status).toUpperCase();
 
     if (normalizedStatus === "FINISHED" || normalizedStatus === "COMPLETED") {
+      const isAlreadySent = !!(withdrawal as any).withdrawal_email_sent_at;
+
       await prisma.withdrawal.update({
         where: { id: withdrawal.id },
         data: {
           status: "FINISHED",
           txHash: hash || withdrawal.txHash,
+          ...(!isAlreadySent ? { withdrawal_email_sent_at: new Date() } : {}),
         },
       });
 
-      // Send on-chain confirmation email to user
-      if (withdrawal.user?.email) {
-        sendWithdrawalCompletedEmail({
-          toEmail: withdrawal.user.email,
-          userName: withdrawal.user.name || "User",
-          withdrawalId: withdrawal.id,
-          amountInr: withdrawal.amountInr,
-          bufferedInr: withdrawal.bufferedInr,
-          usdtAmount: withdrawal.usdtAmount,
-          network: withdrawal.network,
-          walletAddress: withdrawal.walletAddress,
-          txHash: hash || withdrawal.txHash,
-        }).catch((err) => console.error("Webhook completed email dispatch error:", err));
+      // Mirror to Supabase HTTPS
+      try {
+        const supabase = getSupabaseAdmin();
+        await supabase
+          .from("Withdrawal")
+          .update({
+            status: "FINISHED",
+            txHash: hash || withdrawal.txHash,
+            ...(!isAlreadySent ? { withdrawal_email_sent_at: new Date().toISOString() } : {}),
+          })
+          .eq("id", withdrawal.id);
+      } catch (err) {
+        console.warn("Supabase webhook sync fallback:", err);
+      }
+
+      // Idempotent: Send receipt email to user only once
+      if (!isAlreadySent && withdrawal.user?.email) {
+        try {
+          await sendWithdrawalConfirmationEmail(withdrawal.user.email, {
+            userName: withdrawal.user.name || "Member",
+            withdrawalId: withdrawal.id,
+            amountInr: withdrawal.amountInr,
+            bufferedInr: withdrawal.bufferedInr,
+            usdtAmount: withdrawal.usdtAmount,
+            network: withdrawal.network,
+            walletAddress: withdrawal.walletAddress,
+            txHash: hash || withdrawal.txHash,
+          });
+        } catch (err) {
+          console.error("Webhook completed email dispatch error:", err);
+        }
       }
     } else if (
       normalizedStatus === "FAILED" ||

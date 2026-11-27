@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import authOptions, { isAdminEmail } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { broadcastNewTaskAlert } from "@/lib/mailer";
 import {
   extractTaskTargetRating,
   extractTaskDailyLimit,
@@ -222,6 +223,27 @@ export async function POST(req: Request) {
         .single();
 
       if (!tErr && supaTask) {
+        // Trigger asynchronous new task alert to opted-in users
+        (async () => {
+          try {
+            const supabase = getSupabaseAdmin();
+            const { data: supaUsers } = await supabase
+              .from("User")
+              .select("email, name")
+              .neq("task_alerts_enabled", false);
+            if (supaUsers && supaUsers.length > 0) {
+              await broadcastNewTaskAlert(supaUsers, {
+                taskId: supaTask.id,
+                title,
+                rewardInr,
+                instructions: formattedInstructions,
+              });
+            }
+          } catch (err) {
+            console.error("Task alert broadcast error:", err);
+          }
+        })();
+
         return NextResponse.json(
           { task: { ...supaTask, targetRating: finalRating, dailyLimit: finalDailyLimit } },
           { status: 201 }
@@ -242,6 +264,26 @@ export async function POST(req: Request) {
         status: "ACTIVE",
       },
     });
+
+    // Trigger asynchronous new task alert to opted-in users (Prisma fallback)
+    (async () => {
+      try {
+        const pUsers = await prisma.user.findMany({
+          where: { task_alerts_enabled: true },
+          select: { email: true, name: true },
+        });
+        if (pUsers.length > 0) {
+          await broadcastNewTaskAlert(pUsers, {
+            taskId: task.id,
+            title,
+            rewardInr,
+            instructions: formattedInstructions,
+          });
+        }
+      } catch (err) {
+        console.error("Task alert broadcast error:", err);
+      }
+    })();
 
     return NextResponse.json(
       { task: { ...task, targetRating: finalRating, dailyLimit: finalDailyLimit } },
