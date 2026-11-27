@@ -13,32 +13,35 @@ export function generateUserCode(): string {
 }
 
 /**
- * Strict Security: ONLY javnexreview@gmail.com is permitted as ADMIN
+ * Strict Security: ONLY earnjavnex@gmail.com is permitted as ADMIN
  */
 export function isAdminEmail(email: string): boolean {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
   return (
-    normalized === "javnexreview@gmail.com" ||
-    normalized === "javnex.review@gmail.com"
+    normalized === "earnjavnex@gmail.com" ||
+    normalized === "earn.javnex@gmail.com"
   );
 }
 
-export const authOptions: NextAuthOptions = {
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
-  pages: {
-    signIn: "/auth/login",
-    error: "/auth/login",
-  },
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    }),
-  ],
+export function getAuthOptions(): NextAuthOptions {
+  return {
+    session: {
+      strategy: "jwt",
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+    },
+    pages: {
+      signIn: "/auth/login",
+      error: "/auth/login",
+    },
+    providers: [
+      GoogleProvider({
+        clientId:
+          process.env.GOOGLE_CLIENT_ID ||
+          "758717407504-589te6v2b5gc0mgodjrnacpg6romi2ku.apps.googleusercontent.com",
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+      }),
+    ],
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "google") {
@@ -202,7 +205,11 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  secret: process.env.NEXTAUTH_SECRET || "reviewreward-super-secret-key-production-32chars",
-};
+    secret:
+      process.env.NEXTAUTH_SECRET ||
+      "reviewreward-production-secure-nextauth-secret-key-32chars",
+  };
+}
 
+export const authOptions: NextAuthOptions = getAuthOptions();
 export default authOptions;

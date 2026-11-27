@@ -17,6 +17,9 @@
       "service": "earnjavnex"
     }
   ],
+  "vars": {
+    "GOOGLE_CLIENT_ID": "758717407504-589te6v2b5gc0mgodjrnacpg6romi2ku.apps.googleusercontent.com"
+  },
   "observability": {
     "enabled": true
   }
