@@ -14,6 +14,8 @@ import {
   Copy,
   Check,
   ArrowDownToLine,
+  Mail,
+  Send,
 } from "lucide-react";
 
 export default function AdminSettingsPage() {
@@ -52,6 +54,41 @@ export default function AdminSettingsPage() {
       });
     } finally {
       setTestingNp(false);
+    }
+  };
+
+  // Email Delivery Test State
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testEmailTo, setTestEmailTo] = useState("");
+  const [testEmailSender, setTestEmailSender] = useState<"task" | "payments">("task");
+  const [emailTestResult, setEmailTestResult] = useState<{
+    success?: boolean;
+    message?: string;
+    error?: string;
+    provider?: string;
+  } | null>(null);
+
+  const handleTestEmail = async () => {
+    try {
+      setTestingEmail(true);
+      setEmailTestResult(null);
+      const res = await fetch("/api/admin/email/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: testEmailTo.trim() || undefined,
+          senderType: testEmailSender,
+        }),
+      });
+      const data = await res.json();
+      setEmailTestResult(data);
+    } catch (err: any) {
+      setEmailTestResult({
+        success: false,
+        error: err.message || "Failed to reach email test endpoint",
+      });
+    } finally {
+      setTestingEmail(false);
     }
   };
 
@@ -519,6 +556,109 @@ export default function AdminSettingsPage() {
               <p className="text-[11px] text-slate-600 font-mono leading-relaxed">
                 Send exactly {depositData.amountToPay} USDT on the Polygon network from any wallet (MetaMask, TrustWallet, Binance, etc.). Once confirmed on the blockchain, NOWPayments will automatically credit your Custody balance.
               </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Email Delivery Test Card */}
+      <div className="glare-card rounded-2xl p-6 space-y-5 border border-slate-200 bg-white">
+        <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+          <div className="h-9 w-9 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center">
+            <Mail className="h-5 w-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 font-mono uppercase tracking-wider">
+              HTTPS Mailer & Domain Delivery Test
+            </h2>
+            <p className="text-xs text-slate-500 font-mono">
+              Send a live test email from @javnex.in to verify your Resend / ZeptoMail setup
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
+                Recipient Email
+              </label>
+              <input
+                type="email"
+                value={testEmailTo}
+                onChange={(e) => setTestEmailTo(e.target.value)}
+                placeholder="Leave blank to send to your admin email"
+                className="w-full rounded-xl futuristic-input px-3.5 py-2.5 text-xs text-slate-900 font-mono"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
+                Sender Profile
+              </label>
+              <select
+                value={testEmailSender}
+                onChange={(e) => setTestEmailSender(e.target.value as any)}
+                className="w-full rounded-xl futuristic-input px-3.5 py-2.5 text-xs text-slate-900 font-mono bg-white"
+              >
+                <option value="task">task@javnex.in (Task Alerts)</option>
+                <option value="payments">payments@javnex.in (Payout Receipts)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-[11px] text-slate-400 font-mono">
+              Requires <code>RESEND_API_KEY</code> in Cloudflare Worker Secrets.
+            </p>
+            <button
+              onClick={handleTestEmail}
+              disabled={testingEmail}
+              className="btn-futuristic px-5 py-2.5 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {testingEmail ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Sending Test Email...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  <span>Send Test Email</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {emailTestResult && (
+            <div
+              className={`p-4 rounded-xl border text-xs font-mono space-y-2 animate-in fade-in duration-200 ${
+                emailTestResult.success
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                  : "bg-rose-50 border-rose-200 text-rose-900"
+              }`}
+            >
+              <div className="flex items-center gap-2 font-bold">
+                {emailTestResult.success ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <span>Email Delivered Successfully!</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="h-4 w-4 text-rose-600" />
+                    <span>Delivery Failed</span>
+                  </>
+                )}
+              </div>
+              <p className="text-[11px] leading-relaxed">
+                {emailTestResult.message || emailTestResult.error}
+              </p>
+              {emailTestResult.provider && (
+                <span className="inline-block text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-white/70 border border-current">
+                  Provider: {emailTestResult.provider}
+                </span>
+              )}
             </div>
           )}
         </div>
