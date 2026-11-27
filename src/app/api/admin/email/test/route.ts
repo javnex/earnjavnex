@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import authOptions, { isAdminEmail } from "@/lib/auth";
 import { sendHttpsEmail } from "@/lib/mailer";
+import { getEnv } from "@/lib/env";
 
 // POST /api/admin/email/test - Send a live test email to verify credentials and delivery
 export async function POST(req: Request) {
@@ -19,17 +20,17 @@ export async function POST(req: Request) {
 
     const fromAddress =
       senderType === "payments"
-        ? process.env.PAYMENTS_FROM_EMAIL || "ReviewReward Payouts <payments@javnex.in>"
-        : process.env.TASKS_FROM_EMAIL || "ReviewReward Tasks <task@javnex.in>";
+        ? getEnv("PAYMENTS_FROM_EMAIL") || "ReviewReward Payouts <payments@javnex.in>"
+        : getEnv("TASKS_FROM_EMAIL") || "ReviewReward Tasks <task@javnex.in>";
 
-    const hasResend = !!process.env.RESEND_API_KEY;
-    const hasZepto = !!process.env.ZEPTOMAIL_TOKEN;
-    const hasBrevo = !!process.env.BREVO_API_KEY;
+    const hasResend = !!getEnv("RESEND_API_KEY");
+    const hasZepto = !!getEnv("ZEPTOMAIL_TOKEN");
+    const hasBrevo = !!getEnv("BREVO_API_KEY");
 
     if (!hasResend && !hasZepto && !hasBrevo) {
       return NextResponse.json({
         success: false,
-        error: "No email provider secret found in environment! Please add RESEND_API_KEY in Cloudflare Worker Settings > Variables and Secrets.",
+        error: "No email provider secret found in environment! Please ensure RESEND_API_KEY is saved in Cloudflare Worker Settings > Variables and Secrets.",
         configStatus: { hasResend, hasZepto, hasBrevo },
       }, { status: 400 });
     }

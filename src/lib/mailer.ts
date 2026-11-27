@@ -4,6 +4,8 @@
  * Supports Resend, Zoho ZeptoMail, Brevo, or graceful local mock logging.
  */
 
+import { getEnv } from "@/lib/env";
+
 export interface WithdrawalEmailPayload {
   userName?: string;
   withdrawalId: string;
@@ -25,13 +27,13 @@ export interface TaskAlertEmailPayload {
 }
 
 const PAYMENTS_FROM_EMAIL =
-  process.env.PAYMENTS_FROM_EMAIL || "ReviewReward Payouts <payments@javnex.in>";
+  getEnv("PAYMENTS_FROM_EMAIL") || "ReviewReward Payouts <payments@javnex.in>";
 const TASKS_FROM_EMAIL =
-  process.env.TASKS_FROM_EMAIL || "ReviewReward Tasks <task@javnex.in>";
+  getEnv("TASKS_FROM_EMAIL") || "ReviewReward Tasks <task@javnex.in>";
 const REPLY_TO_EMAIL =
-  process.env.REPLY_TO_EMAIL || "info@javnex.in";
+  getEnv("REPLY_TO_EMAIL") || "info@javnex.in";
 const APP_URL =
-  process.env.NEXTAUTH_URL || "https://earn.javnex.in";
+  getEnv("NEXTAUTH_URL") || "https://earn.javnex.in";
 
 /**
  * Universal HTTPS email dispatch using standard Web fetch()
@@ -50,7 +52,7 @@ export async function sendHttpsEmail({
   replyTo?: string;
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   // 1. Try Resend API (Most common & reliable on Cloudflare Workers)
-  const resendKey = process.env.RESEND_API_KEY;
+  const resendKey = getEnv("RESEND_API_KEY");
   if (resendKey) {
     try {
       const res = await fetch("https://api.resend.com/emails", {
@@ -79,10 +81,10 @@ export async function sendHttpsEmail({
   }
 
   // 2. Try Zoho ZeptoMail API (Zoho's official transactional REST API)
-  const zeptoToken = process.env.ZEPTOMAIL_TOKEN;
+  const zeptoToken = getEnv("ZEPTOMAIL_TOKEN");
   if (zeptoToken) {
     try {
-      const zeptoUrl = process.env.ZEPTOMAIL_URL || "https://api.zeptomail.in/v1.1/email";
+      const zeptoUrl = getEnv("ZEPTOMAIL_URL") || "https://api.zeptomail.in/v1.1/email";
       const fromAddress = from.includes("<") ? from.split("<")[1].replace(">", "").trim() : from;
       const fromName = from.includes("<") ? from.split("<")[0].trim().replace(/"/g, "") : "ReviewReward";
 
@@ -115,7 +117,7 @@ export async function sendHttpsEmail({
   }
 
   // 3. Try Brevo (Sendinblue) HTTPS API
-  const brevoKey = process.env.BREVO_API_KEY;
+  const brevoKey = getEnv("BREVO_API_KEY");
   if (brevoKey) {
     try {
       const fromAddress = from.includes("<") ? from.split("<")[1].replace(">", "").trim() : from;
