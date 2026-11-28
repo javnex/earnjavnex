@@ -172,88 +172,72 @@ MANDATORY RULES:
 // Humanized Internal Fallback Pools (Indian English + 2-4 Word Options)
 // -------------------------------------------------------------
 const SPA_5_STAR = [
-  "very good service",
-  "clean and peaceful place",
-  "loved the massage",
-  "best spa ever",
-  "super relaxing session",
   "the spa was very clean & hygenic the staff was international and the jacuzzi was the best part…..absolutely worth it",
   "therapists are very polite & well trained, calm ambiance. definitly recomended",
   "best experiance at {shop}! deep relaxation massage relieved all muscle stiffness, very clean environment & friendly staff",
   "peaceful atmosphere, fragrant oils & extremely attentive staff. solid 5 star hospitality",
   "visited {shop} on friends recommendation, exceeded expectations. polite therapists and genuine massage, truly 5/5",
-  "worth the money loved it",
-  "superb staff & clean place",
+  "worth the money loved the clean premises and polite therapists at {shop}",
+  "superb staff & clean place, very relaxing massage session throughout",
 ];
 
 const SPA_4_STAR = [
-  "good massage & staff",
-  "nice service overall",
-  "clean place good vibe",
-  "peaceful and relaxing",
   "really pleasant and relaxing therapy at {shop}. staff was skilled & courteous and setup was clean. definitly worth visiting",
   "great service & calm vibe at {shop}. quality therapy session and friendly staff. happy with the visit",
   "good massage & clean setup at {shop}. therapist took time to focus on sore points. overall a very good 4 star experiance",
   "enjoyed the session at {shop}. peaceful music, polite staff & tidy rooms. solid 4 star wellness center",
+  "nice service overall, hygienic rooms and cooperative staff. pleasant visit",
 ];
 
 const SPA_3_STAR = [
-  "average service ok ok",
-  "ok ok experience",
   "decent experiance at {shop}. staff was polite and setup was tidy. okay for a quick routine session",
   "average to good therapy session at {shop}. premises were clean & staff was cooperative. standard service for the price",
   "fair visit to {shop}. massage was relaxing enough and premises were maintained. room for minor improvements",
-  "not worth the price",
+  "service was okay and staff was courteous at {shop}. reasonable hygiene and fair therapy for the price",
 ];
 
 const CAFE_5_STAR = [
-  "very good food",
-  "nice taste & ambience",
-  "loved the coffee",
-  "superb food & quick service",
   "fantastic ambiance & delicious offerings at {shop}! staff is warm and service was remarkably prompt. wonderful spot",
   "loved visiting {shop}! top notch quality, fresh food & great customer service. 5 stars all the way",
   "great atmosphere, prompt service & delicious taste at {shop}. staff was attentive and welcoming. will definitly visit again",
+  "superb food & quick service at {shop}, fresh ingredients and great coffee",
+  "very good taste & delightful ambiance at {shop}, staff was courteous and quick to serve",
 ];
 
 const CAFE_4_STAR = [
-  "good food & service",
-  "nice place for coffee",
-  "clean setup good taste",
   "really enjoyed our time at {shop}! good food quality & nice seating. service was slightly busy during rush but solid 4 star visit",
   "great taste & polite hospitality at {shop}. clean environment and nice presentation. worth checking out",
+  "good food and dependable service at {shop}. clean seating area and enjoyable beverages",
+  "nice ambience and good coffee at {shop}, cooperative staff and decent prices",
 ];
 
 const CAFE_3_STAR = [
-  "average taste ok ok",
-  "decent place standard taste",
   "decent experiance at {shop}. food was okay & ambiance was calm. standard casual stop",
-  "fair visit to {shop}. quick order turnaround & clean seating",
+  "fair visit to {shop}. quick order turnaround & clean seating. overall an average pleasant stop",
+  "reasonable food quality and polite staff at {shop}. seating was comfortable and service was on time",
 ];
 
 const GENERAL_5_STAR = [
-  "very good service",
-  "nice staff loved it",
-  "worth the money",
-  "superb service & behavior",
   "outstanding experiance with {shop}! courteous, professional & delivered top tier service. 5 stars well deserved",
   "highly satisfied with the prompt and professional service at {shop}. team genuinely cares, keep up the great work",
   "exceptional quality and genuine hospitality at {shop}. very impressed by their attention to detail. truly recomended",
+  "very good service & courteous behavior by the team at {shop}. completely satisfied with the visit",
+  "superb service and prompt response from the staff at {shop}. highly recommended for everyone",
 ];
 
 const GENERAL_4_STAR = [
-  "good service overall",
-  "nice staff and helpful",
-  "dependable and good",
   "very solid & positive experiance with {shop}. professional team, prompt response & dependable service. deserves 4 stars",
   "smooth & satisfactory service at {shop}. courteous team and good value for money. would happily visit again",
+  "good service overall, helpful staff and dependable turnaround time. pleased with the outcome",
+  "nice staff and helpful support throughout the process at {shop}. solid 4 star experience",
 ];
 
 const GENERAL_3_STAR = [
-  "average service ok ok",
-  "ok ok experience",
   "decent service provided by {shop}. team was responsive & fulfilled the requirements. standard 3 star experiance",
   "fair experiance overall with {shop}. meets expectations for routine requirements. cooperative staff",
+  "average to decent overall visit at {shop}. facilities were fair and staff was helpful for general inquiries",
+  "decent premises and cooperative staff at {shop}. fulfills routine requirements reasonably well, standard 3 star experiance",
+  "fair visit to {shop}. staff was polite and setup was tidy. okay for a routine visit",
 ];
 
 /**
