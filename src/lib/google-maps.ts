@@ -110,8 +110,82 @@ export async function resolveGoogleMapsUrl(url: string): Promise<string> {
 }
 
 /**
+ * Helper to extract reviewer name, text, stars, and shop name from Google Maps HTML.
+ */
+export function extractReviewDataFromHtml(html: string): {
+  reviewerName?: string;
+  reviewText?: string;
+  starRating?: number;
+  shopName?: string;
+} {
+  let reviewerName: string | undefined = undefined;
+  let reviewText: string | undefined = undefined;
+  let starRating: number | undefined = undefined;
+  let shopName: string | undefined = undefined;
+
+  // 1. Reviewer Author Name
+  const ariaActionMatch = html.match(/aria-label="Actions for ([^']+)'s review"/i);
+  if (ariaActionMatch && ariaActionMatch[1]) {
+    reviewerName = ariaActionMatch[1].trim();
+  }
+  if (!reviewerName) {
+    const btnMatch = html.match(
+      /<button class="[^"]*(?:P9Vtnb|fontTitleSmall)[^"]*"[^>]*>([^<]+)<\/button>/
+    );
+    if (btnMatch && btnMatch[1]) {
+      reviewerName = btnMatch[1].trim();
+    }
+  }
+  if (!reviewerName) {
+    const altMatch = html.match(/alt="Photo of ([^"]+)"/);
+    if (altMatch && altMatch[1]) {
+      reviewerName = altMatch[1].trim();
+    }
+  }
+  if (!reviewerName) {
+    const ariaPhotoMatch = html.match(/aria-label="Photo of ([^"]+)"/);
+    if (ariaPhotoMatch && ariaPhotoMatch[1]) {
+      reviewerName = ariaPhotoMatch[1].trim();
+    }
+  }
+  if (!reviewerName) {
+    const photoMatch = html.match(/Photo of ([^\n\]\)\"]+)/i);
+    if (photoMatch && photoMatch[1]) {
+      reviewerName = photoMatch[1].trim();
+    }
+  }
+
+  // 2. Review Text
+  const textMatch =
+    html.match(/<span class="wiI7pd">([^<]+)<\/span>/) ||
+    html.match(/class="MyEned"[^>]*><span[^>]*>([^<]+)<\/span>/);
+  if (textMatch && textMatch[1]) {
+    reviewText = textMatch[1].trim();
+  }
+
+  // 3. Star Rating
+  const starMatch =
+    html.match(/<span class="kvMYJc"[^>]*aria-label="([1-5])\s*stars?"/i) ||
+    html.match(/role="img"[^>]*aria-label="([1-5])\s*stars?"/i) ||
+    html.match(/aria-label="(?:Rated\s*)?([1-5])\s*(?:stars?|\/5)/i);
+  if (starMatch && starMatch[1]) {
+    starRating = parseInt(starMatch[1], 10);
+  }
+
+  // 4. Shop Name
+  const shopMatch =
+    html.match(/<div class="daF0l">([^<]+)<\/div>/) ||
+    html.match(/<h1 class="[^"]*DUwDvf[^"]*"[^>]*>([^<]+)<\/h1>/);
+  if (shopMatch && shopMatch[1]) {
+    shopName = shopMatch[1].trim();
+  }
+
+  return { reviewerName, reviewText, starRating, shopName };
+}
+
+/**
  * Scrapes live Google Maps review DOM using headless Chromium when available,
- * or performs structural proof verification on serverless runtimes (Cloudflare Workers).
+ * or performs cloud headless DOM inspection on serverless runtimes (Cloudflare Workers).
  */
 export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
   success: boolean;
@@ -148,7 +222,7 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
     let extractedReviewerName: string | undefined = undefined;
     let extractedReviewText: string | undefined = undefined;
 
-    // 1. Inspect OpenGraph metadata
+    // 1. Inspect OpenGraph metadata for instantaneous fallback
     try {
       const ogRes = await fetch(targetUrl, {
         headers: {
@@ -182,27 +256,29 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
       // Continue to cloud reader
     }
 
-    // 2. Cloud Headless Reader (renders client-side JS & extracts author name, text & stars on serverless)
+    // 2. Cloud Headless Reader (renders client-side JS & extracts full DOM with author name, text & stars)
     try {
       const jinaController = new AbortController();
-      const jinaTimeout = setTimeout(() => jinaController.abort(), 8000);
+      const jinaTimeout = setTimeout(() => jinaController.abort(), 9000);
 
       const jinaRes = await fetch(`https://r.jina.ai/${targetUrl}`, {
         signal: jinaController.signal,
         headers: {
-          Accept: "text/plain",
-          "X-Wait-For-Selector": "span.wiI7pd, .d4r55, .daF0l, button.P9Vtnb",
+          Accept: "text/html",
+          "X-Return-Format": "html",
+          "X-Wait-For-Selector":
+            "span.wiI7pd, .d4r55, .daF0l, button.P9Vtnb, button.fontTitleSmall",
         },
       });
       clearTimeout(jinaTimeout);
 
       if (jinaRes.ok) {
-        const md = await jinaRes.text();
+        const fullHtml = await jinaRes.text();
 
         if (
-          md.includes("This review is no longer available") ||
-          md.includes("review is unavailable") ||
-          md.includes("Review not found")
+          fullHtml.includes("This review is no longer available") ||
+          fullHtml.includes("review is unavailable") ||
+          fullHtml.includes("Review not found")
         ) {
           return {
             success: false,
@@ -210,38 +286,11 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
           };
         }
 
-        // Extract Reviewer Author Name: "Photo of X" or "![Photo of X]"
-        const authorMatch = md.match(/Photo of ([^\n\]\)\"]+)/i);
-        if (authorMatch && authorMatch[1]) {
-          extractedReviewerName = authorMatch[1].trim();
-        }
-
-        // Extract Review Text: lines after stars
-        const lines = md.split("\n").map((l) => l.trim()).filter(Boolean);
-        for (let i = 0; i < lines.length; i++) {
-          const l = lines[i];
-          if (l.includes("") || l.includes("★")) {
-            if (!extractedStars) {
-              const starsCount = (l.match(/[★]/g) || []).length;
-              if (starsCount >= 1 && starsCount <= 5) extractedStars = starsCount;
-            }
-            for (let j = i + 1; j < Math.min(lines.length, i + 4); j++) {
-              const candidate = lines[j];
-              if (
-                candidate &&
-                !candidate.startsWith("![") &&
-                !candidate.startsWith("") &&
-                !candidate.startsWith("") &&
-                !candidate.startsWith("") &&
-                candidate.length > 5
-              ) {
-                extractedReviewText = candidate;
-                break;
-              }
-            }
-            break;
-          }
-        }
+        const data = extractReviewDataFromHtml(fullHtml);
+        if (data.reviewerName) extractedReviewerName = data.reviewerName;
+        if (data.reviewText) extractedReviewText = data.reviewText;
+        if (data.starRating) extractedStars = data.starRating;
+        if (data.shopName && !extractedShopName) extractedShopName = data.shopName;
       }
     } catch {
       // If cloud reader timed out, continue
@@ -277,60 +326,45 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
       };
     }
 
-    // 1. Extract Shop Name: <div class="daF0l">...</div> or <h1 class="...DUwDvf...">...</h1>
-    let shopMatch = stdout.match(/<div class="daF0l">([^<]+)<\/div>/);
-    if (!shopMatch) {
-      shopMatch = stdout.match(/<h1 class="[^"]*DUwDvf[^"]*"[^>]*>([^<]+)<\/h1>/);
-    }
-    const shopName = shopMatch ? shopMatch[1].trim() : undefined;
-
-    // 2. Extract Reviewer Name: aria-label="Actions for X's review" or <button class="...P9Vtnb...|fontTitleSmall"> or alt="Photo of ..."
-    let reviewerMatch = stdout.match(/aria-label="Actions for ([^']+)'s review"/i);
-    if (!reviewerMatch) {
-      reviewerMatch = stdout.match(
-        /<button class="[^"]*(?:P9Vtnb|fontTitleSmall)[^"]*"[^>]*>([^<]+)<\/button>/
-      );
-    }
-    if (!reviewerMatch) {
-      reviewerMatch = stdout.match(/alt="Photo of ([^"]+)"/);
-    }
-    if (!reviewerMatch) {
-      reviewerMatch = stdout.match(/aria-label="Photo of ([^"]+)"/);
-    }
-    const reviewerName = reviewerMatch ? reviewerMatch[1].trim() : undefined;
-
-    // 3. Extract Canonical Review ID
+    const parsed = extractReviewDataFromHtml(stdout);
     const reviewIdMatch = stdout.match(/data-review-id="([^"]+)"/);
     const reviewId = reviewIdMatch ? reviewIdMatch[1] : extractGoogleReviewId(targetUrl);
 
-    // 4. Extract Review Text: <span class="wiI7pd">...</span> or <div class="MyEned"...><span...>...</span>
-    let textMatch = stdout.match(/<span class="wiI7pd">([^<]+)<\/span>/);
-    if (!textMatch) {
-      textMatch = stdout.match(/class="MyEned"[^>]*><span[^>]*>([^<]+)<\/span>/);
-    }
-    const reviewText = textMatch ? textMatch[1].trim() : undefined;
-
-    // 5. Extract Star Rating: <span class="kvMYJc" role="img" aria-label="X stars">
-    let starRating: number | undefined = undefined;
-    const starMatch =
-      stdout.match(/<span class="kvMYJc"[^>]*aria-label="([1-5])\s*stars?"/i) ||
-      stdout.match(/role="img"[^>]*aria-label="([1-5])\s*stars?"/i) ||
-      stdout.match(/aria-label="(?:Rated\s*)?([1-5])\s*(?:stars?|\/5)/i);
-
-    if (starMatch && starMatch[1]) {
-      starRating = parseInt(starMatch[1], 10);
-    }
-
     return {
-      success: Boolean(reviewerName || shopName || reviewText || starRating),
-      shopName,
-      reviewerName,
-      reviewText,
-      starRating,
+      success: Boolean(parsed.reviewerName || parsed.shopName || parsed.reviewText || parsed.starRating),
+      shopName: parsed.shopName,
+      reviewerName: parsed.reviewerName,
+      reviewText: parsed.reviewText,
+      starRating: parsed.starRating,
       reviewId: reviewId || undefined,
     };
   } catch (err: any) {
-    // If headless launch fails, fallback to structural check
+    // If local headless fails, fallback to cloud reader
+    try {
+      const jinaRes = await fetch(`https://r.jina.ai/${targetUrl}`, {
+        headers: {
+          Accept: "text/html",
+          "X-Return-Format": "html",
+          "X-Wait-For-Selector":
+            "span.wiI7pd, .d4r55, .daF0l, button.P9Vtnb, button.fontTitleSmall",
+        },
+      });
+      if (jinaRes.ok) {
+        const fullHtml = await jinaRes.text();
+        const data = extractReviewDataFromHtml(fullHtml);
+        return {
+          success: Boolean(data.reviewerName || data.shopName || data.reviewText),
+          shopName: data.shopName,
+          reviewerName: data.reviewerName,
+          reviewText: data.reviewText,
+          starRating: data.starRating,
+          reviewId: extractGoogleReviewId(targetUrl) || undefined,
+        };
+      }
+    } catch {
+      // Fallback
+    }
+
     const isGoogleReview =
       targetUrl.includes("/maps/reviews/") ||
       targetUrl.includes("reviews/data=") ||
