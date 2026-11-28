@@ -142,7 +142,13 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
       };
     }
 
-    // Serverless-native OpenGraph inspection via HTTP fetch
+    // Serverless-native OpenGraph and Cloud Headless Inspection
+    let extractedShopName: string | undefined = undefined;
+    let extractedStars: number | undefined = undefined;
+    let extractedReviewerName: string | undefined = undefined;
+    let extractedReviewText: string | undefined = undefined;
+
+    // 1. Inspect OpenGraph metadata
     try {
       const ogRes = await fetch(targetUrl, {
         headers: {
@@ -162,35 +168,95 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
         ogHtml.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
         ogHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
 
-      let extractedShopName: string | undefined = undefined;
       if (ogTitleMatch && ogTitleMatch[1]) {
         extractedShopName = ogTitleMatch[1].replace(/^Google review of\s*/i, "").trim();
       }
 
-      let extractedStars: number | undefined = undefined;
       if (ogDescMatch && ogDescMatch[1]) {
         const starCount = (ogDescMatch[1].match(/★/g) || []).length;
         if (starCount >= 1 && starCount <= 5) {
           extractedStars = starCount;
         }
       }
-
-      const reviewId = extractGoogleReviewId(targetUrl);
-
-      return {
-        success: true,
-        isStructuralOnly: true,
-        shopName: extractedShopName,
-        starRating: extractedStars,
-        reviewId: reviewId || undefined,
-      };
     } catch {
-      return {
-        success: true,
-        isStructuralOnly: true,
-        reviewId: extractGoogleReviewId(targetUrl) || undefined,
-      };
+      // Continue to cloud reader
     }
+
+    // 2. Cloud Headless Reader (renders client-side JS & extracts author name, text & stars on serverless)
+    try {
+      const jinaController = new AbortController();
+      const jinaTimeout = setTimeout(() => jinaController.abort(), 8000);
+
+      const jinaRes = await fetch(`https://r.jina.ai/${targetUrl}`, {
+        signal: jinaController.signal,
+        headers: {
+          Accept: "text/plain",
+          "X-Wait-For-Selector": "span.wiI7pd, .d4r55, .daF0l, button.P9Vtnb",
+        },
+      });
+      clearTimeout(jinaTimeout);
+
+      if (jinaRes.ok) {
+        const md = await jinaRes.text();
+
+        if (
+          md.includes("This review is no longer available") ||
+          md.includes("review is unavailable") ||
+          md.includes("Review not found")
+        ) {
+          return {
+            success: false,
+            error: "This review is no longer available or was deleted on Google Maps.",
+          };
+        }
+
+        // Extract Reviewer Author Name: "Photo of X" or "![Photo of X]"
+        const authorMatch = md.match(/Photo of ([^\n\]\)\"]+)/i);
+        if (authorMatch && authorMatch[1]) {
+          extractedReviewerName = authorMatch[1].trim();
+        }
+
+        // Extract Review Text: lines after stars
+        const lines = md.split("\n").map((l) => l.trim()).filter(Boolean);
+        for (let i = 0; i < lines.length; i++) {
+          const l = lines[i];
+          if (l.includes("") || l.includes("★")) {
+            if (!extractedStars) {
+              const starsCount = (l.match(/[★]/g) || []).length;
+              if (starsCount >= 1 && starsCount <= 5) extractedStars = starsCount;
+            }
+            for (let j = i + 1; j < Math.min(lines.length, i + 4); j++) {
+              const candidate = lines[j];
+              if (
+                candidate &&
+                !candidate.startsWith("![") &&
+                !candidate.startsWith("") &&
+                !candidate.startsWith("") &&
+                !candidate.startsWith("") &&
+                candidate.length > 5
+              ) {
+                extractedReviewText = candidate;
+                break;
+              }
+            }
+            break;
+          }
+        }
+      }
+    } catch {
+      // If cloud reader timed out, continue
+    }
+
+    const reviewId = extractGoogleReviewId(targetUrl);
+
+    return {
+      success: Boolean(extractedShopName || extractedReviewerName || extractedStars || reviewId),
+      shopName: extractedShopName,
+      reviewerName: extractedReviewerName,
+      reviewText: extractedReviewText,
+      starRating: extractedStars,
+      reviewId: reviewId || undefined,
+    };
   }
 
   try {

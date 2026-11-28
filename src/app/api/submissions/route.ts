@@ -360,37 +360,60 @@ export async function POST(req: Request) {
       }
     }
 
-    // CHECK 2: Verify Reviewer Account Name Match
-    let verifiedAuthorName = expectedReviewer;
-    if (liveScrape.reviewerName) {
-      const nameMatches = isReviewerNameMatch(expectedReviewer, liveScrape.reviewerName);
-      if (!nameMatches) {
-        return NextResponse.json(
-          {
-            success: false,
-            approved: false,
-            failingStep: "account",
-            checks: {
-              shopMatch: {
-                passed: true,
-                label: "Store Listing Match",
-                details: `Verified: ${liveScrape.shopName || targetTask.title}`,
-              },
-              accountMatch: {
-                passed: false,
-                label: "Google Account Identity",
-                details: `Review was posted by "${liveScrape.reviewerName}", but your logged-in account is "${expectedReviewer}"`,
-              },
-              starsMatch: { passed: false, label: "Star Rating Compliance" },
-              textMatch: { passed: false, label: "Review Text Compliance" },
+    // CHECK 2: Strict Reviewer Account Match (Prevent using someone else's Google account)
+    if (!liveScrape.reviewerName) {
+      return NextResponse.json(
+        {
+          success: false,
+          approved: false,
+          failingStep: "account",
+          checks: {
+            shopMatch: {
+              passed: true,
+              label: "Store Listing Match",
+              details: `Verified: ${liveScrape.shopName || targetTask.title}`,
             },
-            error: `Verification failed: Reviewer account mismatch! The review on the store listing was posted by "${liveScrape.reviewerName}", but your logged-in account name is "${expectedReviewer}". You must post the review using your own logged-in account.`,
+            accountMatch: {
+              passed: false,
+              label: "Google Account Identity",
+              details: `Review author name on Google Maps could not be verified. It must publicly match your logged-in account "${expectedReviewer}".`,
+            },
+            starsMatch: { passed: false, label: "Star Rating Compliance" },
+            textMatch: { passed: false, label: "Review Text Compliance" },
           },
-          { status: 400 }
-        );
-      }
-      verifiedAuthorName = liveScrape.reviewerName;
+          error: `Verification failed: Could not confirm the author name of this review on Google Maps. To prevent submitting reviews posted by other accounts, your review author name must be publicly visible and match your logged-in account "${expectedReviewer}".`,
+        },
+        { status: 400 }
+      );
     }
+
+    const nameMatches = isReviewerNameMatch(expectedReviewer, liveScrape.reviewerName);
+    if (!nameMatches) {
+      return NextResponse.json(
+        {
+          success: false,
+          approved: false,
+          failingStep: "account",
+          checks: {
+            shopMatch: {
+              passed: true,
+              label: "Store Listing Match",
+              details: `Verified: ${liveScrape.shopName || targetTask.title}`,
+            },
+            accountMatch: {
+              passed: false,
+              label: "Google Account Identity",
+              details: `Review was posted by "${liveScrape.reviewerName}", but your logged-in account is "${expectedReviewer}"`,
+            },
+            starsMatch: { passed: false, label: "Star Rating Compliance" },
+            textMatch: { passed: false, label: "Review Text Compliance" },
+          },
+          error: `Verification failed: Reviewer account mismatch! The review on the store listing was posted by "${liveScrape.reviewerName}", but your logged-in account name is "${expectedReviewer}". You cannot claim a review posted under a different Google account.`,
+        },
+        { status: 400 }
+      );
+    }
+    const verifiedAuthorName = liveScrape.reviewerName;
 
     // CHECK 3: Verify Star Rating Match
     if (liveScrape.starRating) {
