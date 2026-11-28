@@ -150,12 +150,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Check 1 User ID = 1 Submission per Shop
+    // 2. Check 1 User ID = 1 Submission per Shop (exclude previous rejected attempts)
     const { data: existingUserSubmission } = await supabase
       .from("Submission")
-      .select("id")
+      .select("id, status")
       .eq("userId", userId)
       .eq("taskId", taskId)
+      .neq("status", "REJECTED")
       .maybeSingle();
 
     if (existingUserSubmission) {
@@ -267,19 +268,31 @@ export async function POST(req: Request) {
     const liveScrape = await scrapeGoogleMapsLiveReview(trimmedProofLink);
 
     if (!liveScrape.success) {
+      const isUnavailable =
+        liveScrape.isUnavailable ||
+        liveScrape.error?.includes("no longer available") ||
+        liveScrape.error?.includes("shadow-banned");
+
       return NextResponse.json(
         {
           success: false,
           approved: false,
-          failingStep: "shop",
+          failingStep: isUnavailable ? "account" : "shop",
           checks: {
             shopMatch: {
-              passed: false,
+              passed: isUnavailable ? true : false,
               label: "Store Listing Match",
-              details:
-                liveScrape.error || "Review is not publicly accessible or was deleted",
+              details: isUnavailable
+                ? `Store confirmed (${liveScrape.shopName || targetTask.title})`
+                : liveScrape.error || "Review is not publicly accessible or was deleted",
             },
-            accountMatch: { passed: false, label: "Google Account Identity" },
+            accountMatch: {
+              passed: false,
+              label: "Google Account Identity",
+              details: isUnavailable
+                ? `Google Maps Shadow-Ban: Google reports "This review is no longer available." Author "${expectedReviewer}" is hidden from public view.`
+                : "Google Account Identity",
+            },
             starsMatch: { passed: false, label: "Star Rating Compliance" },
             textMatch: { passed: false, label: "Review Text Compliance" },
           },

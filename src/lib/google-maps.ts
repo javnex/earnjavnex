@@ -195,6 +195,7 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
   starRating?: number;
   reviewId?: string;
   isStructuralOnly?: boolean;
+  isUnavailable?: boolean;
   error?: string;
 }> {
   // First resolve any shortlink (e.g. share.google / maps.app.goo.gl)
@@ -265,6 +266,7 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
         signal: jinaController.signal,
         headers: {
           Accept: "text/plain",
+          "X-No-Cache": "true",
         },
       });
       clearTimeout(jinaTimeout);
@@ -280,6 +282,8 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
         ) {
           return {
             success: false,
+            isUnavailable: true,
+            shopName: extractedShopName,
             error:
               "Google Maps shows: 'This review is no longer available.' Google has suppressed or shadow-banned this review from public view (or it was deleted). Open the link in an Incognito tab to check: reviews must be publicly visible to earn rewards.",
           };
@@ -320,8 +324,11 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
       stdout.includes("Review not found") ||
       stdout.includes("HlvSq")
     ) {
+      const parsed = extractReviewDataFromHtml(stdout);
       return {
         success: false,
+        isUnavailable: true,
+        shopName: parsed.shopName,
         error:
           "Google Maps shows: 'This review is no longer available.' Google has suppressed or shadow-banned this review from public view (or it was deleted). Open the link in an Incognito tab to check: reviews must be publicly visible to earn rewards.",
       };
@@ -344,15 +351,27 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
     try {
       const jinaRes = await fetch(`https://r.jina.ai/${targetUrl}`, {
         headers: {
-          Accept: "text/html",
-          "X-Return-Format": "html",
-          "X-Wait-For-Selector":
-            "span.wiI7pd, .d4r55, .daF0l, button.P9Vtnb, button.fontTitleSmall",
+          Accept: "text/plain",
+          "X-No-Cache": "true",
         },
       });
       if (jinaRes.ok) {
-        const fullHtml = await jinaRes.text();
-        const data = extractReviewDataFromHtml(fullHtml);
+        const fullContent = await jinaRes.text();
+        if (
+          fullContent.includes("This review is no longer available") ||
+          fullContent.includes("review is unavailable") ||
+          fullContent.includes("Review not found") ||
+          (fullContent.includes("Unavailable") && !fullContent.includes("★★"))
+        ) {
+          return {
+            success: false,
+            isUnavailable: true,
+            error:
+              "Google Maps shows: 'This review is no longer available.' Google has suppressed or shadow-banned this review from public view (or it was deleted). Open the link in an Incognito tab to check: reviews must be publicly visible to earn rewards.",
+          };
+        }
+
+        const data = extractReviewDataFromHtml(fullContent);
         return {
           success: Boolean(data.reviewerName || data.shopName || data.reviewText),
           shopName: data.shopName,

@@ -821,6 +821,33 @@ export default function TasksPage() {
               </div>
             </div>
 
+            {/* Submitted Proof Link Banner */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider">
+                <span>Submitted Proof Link (Fresh Live Check)</span>
+                <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-mono text-[9px]">
+                  Direct Link
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className="text-xs font-mono font-semibold text-slate-800 truncate"
+                  title={verificationModal.proofLink}
+                >
+                  {verificationModal.proofLink}
+                </span>
+                <a
+                  href={verificationModal.proofLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline shrink-0"
+                >
+                  <span>Test in Incognito</span>
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            </div>
+
             {/* 4-POINT LIVE CHECKLIST */}
             <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5">
               <div className="flex items-center justify-between pb-1 border-b border-slate-200 text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">
@@ -928,13 +955,28 @@ export default function TasksPage() {
             {verificationModal.isComplete && !verificationModal.isApproved && (
               <div className="space-y-4">
                 {/* Rejection Alert */}
-                <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-4 space-y-1.5">
+                <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-4 space-y-2">
                   <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-rose-800 block">
                     Rejection Explanation:
                   </span>
                   <p className="text-xs font-semibold text-rose-900 leading-relaxed font-sans">
                     {verificationModal.error}
                   </p>
+                  {(verificationModal.error?.includes("no longer available") ||
+                    verificationModal.error?.includes("shadow-banned") ||
+                    verificationModal.error?.includes("Shadow-Ban")) && (
+                    <div className="mt-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 text-[11px] space-y-1.5 font-sans">
+                      <strong className="block font-bold text-amber-900">
+                        Why does Google Maps show &ldquo;This review is no longer available&rdquo;?
+                      </strong>
+                      <p className="text-slate-700 leading-relaxed">
+                        Google&rsquo;s automated anti-spam algorithms automatically hide reviews with very short text (like &ldquo;ok ok experiance&rdquo;) or rapid posts from public view. While it may show inside your own Google Maps app, it is <strong>suppressed from public visitors</strong> (and our verification system).
+                      </p>
+                      <p className="font-semibold text-amber-900 pt-1">
+                        👉 Click &ldquo;Test in Incognito&rdquo; above to verify Google&rsquo;s message yourself. To fix: edit your review on Google Maps to write a natural 1–2 sentence feedback, wait 2–3 minutes, and verify again.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Step-by-Step Fix Instructions */}
