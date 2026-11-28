@@ -21,6 +21,7 @@
   ],
   "vars": {
     "GOOGLE_CLIENT_ID": "758717407504-589te6v2b5gc0mgodjrnacpg6romi2ku.apps.googleusercontent.com",
+    "NOWPAYMENTS_EMAIL": "javnex.review@gmail.com",
     "PAYMENTS_FROM_EMAIL": "EarnReward Payouts <payments@javnex.in>",
     "REPLY_TO_EMAIL": "info@javnex.in",
     "TASKS_FROM_EMAIL": "EarnReward Tasks <task@javnex.in>"

@@ -134,16 +134,58 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
       targetUrl.includes("rp_h:") ||
       targetUrl.includes("share.google");
 
-    if (isGoogleReview) {
+    if (!isGoogleReview) {
+      return {
+        success: false,
+        error: "Could not verify Google Maps review URL.",
+      };
+    }
+
+    // Serverless-native OpenGraph inspection via HTTP fetch
+    try {
+      const ogRes = await fetch(targetUrl, {
+        headers: {
+          "User-Agent":
+            "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+        redirect: "follow",
+      });
+      const ogHtml = await ogRes.text();
+
+      const ogTitleMatch =
+        ogHtml.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
+        ogHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
+
+      const ogDescMatch =
+        ogHtml.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
+        ogHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
+
+      let extractedShopName: string | undefined = undefined;
+      if (ogTitleMatch && ogTitleMatch[1]) {
+        extractedShopName = ogTitleMatch[1].replace(/^Google review of\s*/i, "").trim();
+      }
+
+      let extractedStars: number | undefined = undefined;
+      if (ogDescMatch && ogDescMatch[1]) {
+        const starCount = (ogDescMatch[1].match(/★/g) || []).length;
+        if (starCount >= 1 && starCount <= 5) {
+          extractedStars = starCount;
+        }
+      }
+
+      return {
+        success: true,
+        isStructuralOnly: true,
+        shopName: extractedShopName,
+        starRating: extractedStars,
+      };
+    } catch {
       return {
         success: true,
         isStructuralOnly: true,
       };
     }
-    return {
-      success: false,
-      error: "Could not verify Google Maps review URL.",
-    };
   }
 
   try {
