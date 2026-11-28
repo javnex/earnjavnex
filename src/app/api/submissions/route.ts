@@ -266,12 +266,16 @@ export async function POST(req: Request) {
       (session.user as any)?.name || reviewerName || (session.user as any)?.email;
     const requiredStars = assignedStars || 5;
 
-    const liveScrape = await scrapeGoogleMapsLiveReview(trimmedProofLink);
+    const liveScrape = await scrapeGoogleMapsLiveReview(
+      trimmedProofLink,
+      validation.resolvedReviewUrl
+    );
     const canonicalReviewId = liveScrape.reviewId || validation.reviewId;
 
     console.log("[Verification]", {
       taskId,
       source: liveScrape.source,
+      diagnostics: liveScrape.diagnostics,
       hasReviewer: Boolean(liveScrape.reviewerName),
       hasShop: Boolean(liveScrape.shopName),
       starRating: liveScrape.starRating,
@@ -411,11 +415,18 @@ export async function POST(req: Request) {
       verifiedAuthorName = liveScrape.reviewerName;
     } else {
       // Author name could not be confirmed on Google Maps: STRICT REJECTION (never auto-approve unknown author)
+      const diagList = liveScrape.diagnostics || [];
+      const diagSummary = diagList.length > 0 ? diagList.join(", ") : "none";
+      const isUpstreamBlocked = diagList.some((d) =>
+        /=(?:403|429|0|captcha|quota_429|not_bound|err|timeout)/.test(d)
+      );
+
       return NextResponse.json(
         {
           success: false,
           approved: false,
           failingStep: "account",
+          diagnostics: diagList,
           checks: {
             shopMatch: {
               passed: true,
@@ -425,12 +436,16 @@ export async function POST(req: Request) {
             accountMatch: {
               passed: false,
               label: "Google Account Identity",
-              details: `Review author name on Google Maps could not be verified as "${expectedReviewer}"`,
+              details: isUpstreamBlocked
+                ? `Verification service rate-limited/blocked [${diagSummary}]`
+                : `Review author name on Google Maps could not be verified as "${expectedReviewer}" [${diagSummary}]`,
             },
             starsMatch: { passed: false, label: "Star Rating Compliance" },
             textMatch: { passed: false, label: "Review Text Compliance" },
           },
-          error: `Verification failed: Could not confirm the author name of this review on Google Maps. To prevent submitting reviews posted by other accounts, your review author name must be publicly visible and match your logged-in account "${expectedReviewer}". If you recently posted, please wait 1-2 minutes for Google Maps to index it publicly and click Verify & Earn again.`,
+          error: isUpstreamBlocked
+            ? `Verification failed: Google Maps verification renderer was temporarily rate-limited or blocked at the server edge (${diagSummary}). Please try again in 1 minute, or contact admin if this persists.`
+            : `Verification failed: Could not confirm the author name of this review on Google Maps. To prevent submitting reviews posted by other accounts, your review author name must be publicly visible and match your logged-in account "${expectedReviewer}". If you recently posted, please wait 1-2 minutes for Google Maps to index it publicly and click Verify & Earn again. [${diagSummary}]`,
         },
         { status: 400 }
       );
