@@ -19,6 +19,9 @@
       "service": "earnjavnex"
     }
   ],
+  "browser": {
+    "binding": "MYBROWSER"
+  },
   "vars": {
     "GOOGLE_CLIENT_ID": "758717407504-589te6v2b5gc0mgodjrnacpg6romi2ku.apps.googleusercontent.com",
     "NOWPAYMENTS_EMAIL": "javnex.review@gmail.com",

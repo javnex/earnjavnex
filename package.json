@@ -33,6 +33,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@cloudflare/puppeteer": "^2.0.1",
     "@opennextjs/cloudflare": "^1.20.19",
     "@tailwindcss/turbopack": "4.3.3",
     "@types/bcryptjs": "^2.4.6",

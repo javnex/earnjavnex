@@ -335,7 +335,36 @@ export async function POST(req: Request) {
       }
     }
 
-    // CHECK 2: Reviewer Account Match (Strict when extracted; confirms identity when serverless crawler is masked)
+    // Check if Google Maps marked review as unavailable/shadow-banned
+    if (liveScrape.isUnavailable) {
+      return NextResponse.json(
+        {
+          success: false,
+          approved: false,
+          failingStep: "account",
+          checks: {
+            shopMatch: {
+              passed: true,
+              label: "Store Listing Match",
+              details: `Store CID verified (${targetTask.title})`,
+            },
+            accountMatch: {
+              passed: false,
+              label: "Google Account Identity",
+              details: "Review is suppressed or shadow-banned on Google Maps",
+            },
+            starsMatch: { passed: false, label: "Star Rating Compliance" },
+            textMatch: { passed: false, label: "Review Text Compliance" },
+          },
+          error:
+            liveScrape.error ||
+            "Google Maps shows: 'This review is no longer available.' Google has suppressed or shadow-banned this review from public view (or it was deleted). Open the link in an Incognito tab to check: reviews must be publicly visible to earn rewards.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // CHECK 2: Strict Reviewer Account Match
     let verifiedAuthorName = expectedReviewer;
 
     if (liveScrape.reviewerName) {
@@ -366,6 +395,31 @@ export async function POST(req: Request) {
         );
       }
       verifiedAuthorName = liveScrape.reviewerName;
+    } else {
+      // Author name could not be confirmed on Google Maps: STRICT REJECTION (never auto-approve unknown author)
+      return NextResponse.json(
+        {
+          success: false,
+          approved: false,
+          failingStep: "account",
+          checks: {
+            shopMatch: {
+              passed: true,
+              label: "Store Listing Match",
+              details: `Store CID verified (${targetTask.title})`,
+            },
+            accountMatch: {
+              passed: false,
+              label: "Google Account Identity",
+              details: `Review author name on Google Maps could not be verified as "${expectedReviewer}"`,
+            },
+            starsMatch: { passed: false, label: "Star Rating Compliance" },
+            textMatch: { passed: false, label: "Review Text Compliance" },
+          },
+          error: `Verification failed: Could not confirm the author name of this review on Google Maps. To prevent submitting reviews posted by other accounts, your review author name must be publicly visible and match your logged-in account "${expectedReviewer}". If you recently posted, please wait 1-2 minutes for Google Maps to index it publicly and click Verify & Earn again.`,
+        },
+        { status: 400 }
+      );
     }
 
     // CHECK 3: Verify Star Rating Match
