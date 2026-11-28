@@ -29,6 +29,11 @@ export function getNowpaymentsIpnSecret(): string {
   return (getEnv("NOWPAYMENTS_IPN_SECRET") || "").trim().replace(/^["']|["']$/g, "");
 }
 
+function getProxyHeaders(): Record<string, string> {
+  const proxySecret = (getEnv("NOWPAYMENTS_PROXY_SECRET") || "").trim();
+  return proxySecret ? { "x-proxy-secret": proxySecret } : {};
+}
+
 // In-memory cache + edge Cache API key (NOWPayments JWTs expire after ~300 seconds)
 let cachedToken: { token: string; expiresAt: number } | null = null;
 const JWT_SAFETY_BUFFER_MS = 30_000;
@@ -171,14 +176,11 @@ export async function getNowpaymentsAuthToken(forceRefresh = false): Promise<str
   }
 
   const authEndpoint = authProxyUrl || `${apiUrl}/auth`;
-  const proxySecret = getEnv("NOWPAYMENTS_PROXY_SECRET");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
+    ...getProxyHeaders(),
   };
-  if (proxySecret && authProxyUrl) {
-    headers["x-proxy-secret"] = proxySecret;
-  }
 
   const res = await fetch(authEndpoint, {
     method: "POST",
@@ -241,6 +243,7 @@ export async function getNowpaymentsBalance(): Promise<{
     const res = await fetch(`${apiUrl}/balance`, {
       headers: {
         "x-api-key": apiKey,
+        ...getProxyHeaders(),
       },
     });
 
@@ -355,6 +358,7 @@ export async function executeNowpaymentsPayout(params: {
           "x-api-key": apiKey,
           Authorization: `Bearer ${authToken}`,
           "Content-Type": "application/json",
+          ...getProxyHeaders(),
         },
         body: JSON.stringify(payoutPayload),
       });
@@ -392,6 +396,7 @@ export async function executeNowpaymentsPayout(params: {
           "x-api-key": apiKey,
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          ...getProxyHeaders(),
         },
         body: JSON.stringify({
           verification_code: totpCode,
