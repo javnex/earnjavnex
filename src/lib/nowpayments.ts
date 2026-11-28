@@ -1,12 +1,24 @@
 import crypto from "crypto";
+import { getEnv } from "@/lib/env";
 
-const NOWPAYMENTS_API_URL =
-  process.env.NOWPAYMENTS_API_URL || "https://api.nowpayments.io/v1";
-const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY || "";
-const NOWPAYMENTS_EMAIL = process.env.NOWPAYMENTS_EMAIL || "";
-const NOWPAYMENTS_PASSWORD = process.env.NOWPAYMENTS_PASSWORD || "";
-const NOWPAYMENTS_2FA_SECRET = process.env.NOWPAYMENTS_2FA_SECRET || "";
-const NOWPAYMENTS_IPN_SECRET = process.env.NOWPAYMENTS_IPN_SECRET || "";
+export function getNowpaymentsApiUrl(): string {
+  return getEnv("NOWPAYMENTS_API_URL") || "https://api.nowpayments.io/v1";
+}
+export function getNowpaymentsApiKey(): string {
+  return getEnv("NOWPAYMENTS_API_KEY") || "";
+}
+export function getNowpaymentsEmail(): string {
+  return getEnv("NOWPAYMENTS_EMAIL") || "";
+}
+export function getNowpaymentsPassword(): string {
+  return getEnv("NOWPAYMENTS_PASSWORD") || "";
+}
+export function getNowpayments2faSecret(): string {
+  return getEnv("NOWPAYMENTS_2FA_SECRET") || "";
+}
+export function getNowpaymentsIpnSecret(): string {
+  return getEnv("NOWPAYMENTS_IPN_SECRET") || "";
+}
 
 // In-memory cache for auth JWT
 let cachedToken: { token: string; expiresAt: number } | null = null;
@@ -57,18 +69,22 @@ export async function getNowpaymentsAuthToken(): Promise<string> {
     return cachedToken.token;
   }
 
-  if (!NOWPAYMENTS_EMAIL || !NOWPAYMENTS_PASSWORD) {
+  const email = getNowpaymentsEmail();
+  const password = getNowpaymentsPassword();
+  const apiUrl = getNowpaymentsApiUrl();
+
+  if (!email || !password) {
     throw new Error(
       "NOWPayments credentials (NOWPAYMENTS_EMAIL / NOWPAYMENTS_PASSWORD) are not configured."
     );
   }
 
-  const res = await fetch(`${NOWPAYMENTS_API_URL}/auth`, {
+  const res = await fetch(`${apiUrl}/auth`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      email: NOWPAYMENTS_EMAIL,
-      password: NOWPAYMENTS_PASSWORD,
+      email,
+      password,
     }),
   });
 
@@ -94,7 +110,10 @@ export async function getNowpaymentsBalance(): Promise<{
   balances: Record<string, { amount: number; pendingAmount: number }>;
   raw: any;
 }> {
-  if (!NOWPAYMENTS_API_KEY) {
+  const apiKey = getNowpaymentsApiKey();
+  const apiUrl = getNowpaymentsApiUrl();
+
+  if (!apiKey) {
     return {
       balances: {
         usdtmatic: { amount: 0.0, pendingAmount: 0 },
@@ -105,9 +124,9 @@ export async function getNowpaymentsBalance(): Promise<{
   }
 
   try {
-    const res = await fetch(`${NOWPAYMENTS_API_URL}/balance`, {
+    const res = await fetch(`${apiUrl}/balance`, {
       headers: {
-        "x-api-key": NOWPAYMENTS_API_KEY,
+        "x-api-key": apiKey,
       },
     });
 
@@ -180,8 +199,14 @@ export async function executeNowpaymentsPayout(params: {
   // Ticker: usdtbsc (CoinDCX / BSC BEP-20) or usdtmatic (Polygon)
   const currencyTicker = network.toUpperCase() === "POLYGON" ? "usdtmatic" : "usdtbsc";
 
+  const apiKey = getNowpaymentsApiKey();
+  const email = getNowpaymentsEmail();
+  const password = getNowpaymentsPassword();
+  const apiUrl = getNowpaymentsApiUrl();
+  const twoFaSecret = getNowpayments2faSecret();
+
   // If live credentials are not set, run seamless sandbox / simulated payout
-  if (!NOWPAYMENTS_API_KEY || !NOWPAYMENTS_EMAIL || !NOWPAYMENTS_PASSWORD) {
+  if (!apiKey || !email || !password) {
     console.log(
       `[NOWPayments SIMULATION] Processing payout of ${usdtAmount} USDT to ${walletAddress}`
     );
@@ -205,7 +230,7 @@ export async function executeNowpaymentsPayout(params: {
 
     // 2. Create Payout
     const callbackUrl = `${
-      process.env.NEXTAUTH_URL || "https://reviewreward.com"
+      getEnv("NEXTAUTH_URL") || "https://earn.javnex.in"
     }/api/webhooks/nowpayments`;
 
     const payoutPayload = {
@@ -220,10 +245,10 @@ export async function executeNowpaymentsPayout(params: {
       ],
     };
 
-    const payoutRes = await fetch(`${NOWPAYMENTS_API_URL}/payout`, {
+    const payoutRes = await fetch(`${apiUrl}/payout`, {
       method: "POST",
       headers: {
-        "x-api-key": NOWPAYMENTS_API_KEY,
+        "x-api-key": apiKey,
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
@@ -241,15 +266,15 @@ export async function executeNowpaymentsPayout(params: {
     const payoutId = item?.id ? String(item.id) : undefined;
 
     // 3. Automated 2FA TOTP Verification
-    if (NOWPAYMENTS_2FA_SECRET && batchId) {
-      const totpCode = generateTOTP(NOWPAYMENTS_2FA_SECRET);
+    if (twoFaSecret && batchId) {
+      const totpCode = generateTOTP(twoFaSecret);
 
       const verifyRes = await fetch(
-        `${NOWPAYMENTS_API_URL}/payout/${batchId}/verify`,
+        `${apiUrl}/payout/${batchId}/verify`,
         {
           method: "POST",
           headers: {
-            "x-api-key": NOWPAYMENTS_API_KEY,
+            "x-api-key": apiKey,
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
@@ -290,7 +315,8 @@ export function verifyNowpaymentsIpnSignature(
   payload: Record<string, any>,
   receivedSig: string
 ): boolean {
-  if (!NOWPAYMENTS_IPN_SECRET) {
+  const ipnSecret = getNowpaymentsIpnSecret();
+  if (!ipnSecret) {
     if (process.env.NODE_ENV === "production") {
       console.error(
         "NOWPAYMENTS_IPN_SECRET is not configured in production. Rejecting IPN webhook for security."
@@ -309,7 +335,7 @@ export function verifyNowpaymentsIpnSignature(
 
   const jsonString = JSON.stringify(sortedObj);
   const hmac = crypto
-    .createHmac("sha512", NOWPAYMENTS_IPN_SECRET)
+    .createHmac("sha512", ipnSecret)
     .update(jsonString)
     .digest("hex");
 

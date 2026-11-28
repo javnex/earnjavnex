@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import authOptions, { isAdminEmail } from "@/lib/auth";
+import { getEnv } from "@/lib/env";
 import {
   getNowpaymentsAuthToken,
   getNowpaymentsBalance,
@@ -17,11 +18,11 @@ export async function POST() {
       return NextResponse.json({ error: "Forbidden: Admin access only" }, { status: 403 });
     }
 
-    const apiKey = process.env.NOWPAYMENTS_API_KEY;
-    const npEmail = process.env.NOWPAYMENTS_EMAIL;
-    const npPassword = process.env.NOWPAYMENTS_PASSWORD;
-    const twoFaSecret = process.env.NOWPAYMENTS_2FA_SECRET;
-    const ipnSecret = process.env.NOWPAYMENTS_IPN_SECRET;
+    const apiKey = getEnv("NOWPAYMENTS_API_KEY");
+    const npEmail = getEnv("NOWPAYMENTS_EMAIL");
+    const npPassword = getEnv("NOWPAYMENTS_PASSWORD");
+    const twoFaSecret = getEnv("NOWPAYMENTS_2FA_SECRET");
+    const ipnSecret = getEnv("NOWPAYMENTS_IPN_SECRET");
 
     const configStatus = {
       hasApiKey: !!apiKey,
@@ -35,7 +36,7 @@ export async function POST() {
       return NextResponse.json({
         connected: false,
         mode: "SIMULATION",
-        message: "NOWPayments credentials are currently empty in .env. Platform is running in simulated test mode.",
+        message: "NOWPayments credentials are not configured in Cloudflare Worker Secrets. Platform is running in simulated test mode.",
         configStatus,
       });
     }

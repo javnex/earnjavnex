@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import authOptions, { isAdminEmail } from "@/lib/auth";
+import { getEnv } from "@/lib/env";
 
 // POST /api/admin/nowpayments/deposit - Generate an official deposit address to fund Custody
 export async function POST(req: Request) {
@@ -16,12 +17,12 @@ export async function POST(req: Request) {
     const amountUsd = parseFloat(body.amountUsd) || 10.0;
     const payCurrency = body.currency || "usdtmatic"; // USDT on Polygon network
 
-    const apiKey = process.env.NOWPAYMENTS_API_KEY;
-    const apiUrl = process.env.NOWPAYMENTS_API_URL || "https://api.nowpayments.io/v1";
+    const apiKey = getEnv("NOWPAYMENTS_API_KEY");
+    const apiUrl = getEnv("NOWPAYMENTS_API_URL") || "https://api.nowpayments.io/v1";
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: "NOWPAYMENTS_API_KEY is not configured in .env" },
+        { error: "NOWPAYMENTS_API_KEY is not configured in Cloudflare Worker Secrets" },
         { status: 400 }
       );
     }
