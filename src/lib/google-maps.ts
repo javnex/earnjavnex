@@ -113,6 +113,22 @@ export async function resolveGoogleMapsUrl(url: string): Promise<string> {
 }
 
 /**
+ * Decodes standard HTML entities commonly found in scraped Google Maps DOM strings.
+ */
+export function decodeHtmlEntities(str?: string): string | undefined {
+  if (!str) return str;
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+}
+
+/**
  * Helper to extract reviewer name, text, stars, and shop name from Google Maps HTML.
  */
 export function extractReviewDataFromHtml(html: string): {
@@ -146,13 +162,13 @@ export function extractReviewDataFromHtml(html: string): {
     }
   }
   if (!reviewerName) {
-    const altMatch = html.match(/alt="Photo of ([^"]+)"/);
+    const altMatch = html.match(/alt="Photo of ([^"]+)"/i);
     if (altMatch && altMatch[1]) {
       reviewerName = altMatch[1].trim();
     }
   }
   if (!reviewerName) {
-    const ariaPhotoMatch = html.match(/aria-label="Photo of ([^"]+)"/);
+    const ariaPhotoMatch = html.match(/aria-label="Photo of ([^"]+)"/i);
     if (ariaPhotoMatch && ariaPhotoMatch[1]) {
       reviewerName = ariaPhotoMatch[1].trim();
     }
@@ -163,20 +179,36 @@ export function extractReviewDataFromHtml(html: string): {
       reviewerName = photoMatch[1].trim();
     }
   }
+  if (!reviewerName) {
+    const mdPhotoMatch = html.match(/!\[(?:Image\s*\d*:\s*)?Photo of ([^\]]+)\]/i);
+    if (mdPhotoMatch && mdPhotoMatch[1]) {
+      reviewerName = mdPhotoMatch[1].trim();
+    }
+  }
 
   // 2. Review Text
   const textMatch =
     html.match(/<span class="wiI7pd">([^<]+)<\/span>/) ||
     html.match(/class="MyEned"[^>]*><span[^>]*>([^<]+)<\/span>/);
   if (textMatch && textMatch[1]) {
-    reviewText = textMatch[1].trim();
+    reviewText = decodeHtmlEntities(textMatch[1].trim());
+  }
+  if (!reviewText) {
+    // Markdown format fallback (e.g. from Jina markdown output)
+    const mdBodyMatch = html.match(
+      /(?:minutes?|hours?|days?|weeks?|months?|years?)\s*ago\s*\n+([\s\S]*?)(?:\n\s*(?:|Like|Share|Collapse|Response|\*\*Rooms|\*\*Service|\*\*Location|$))/i
+    );
+    if (mdBodyMatch && mdBodyMatch[1] && mdBodyMatch[1].trim().length >= 5) {
+      reviewText = decodeHtmlEntities(mdBodyMatch[1].trim());
+    }
   }
 
   // 3. Star Rating
   const starMatch =
     html.match(/<span class="kvMYJc"[^>]*aria-label="([1-5])\s*stars?"/i) ||
     html.match(/role="img"[^>]*aria-label="([1-5])\s*stars?"/i) ||
-    html.match(/aria-label="(?:Rated\s*)?([1-5])\s*(?:stars?|\/5)/i);
+    html.match(/aria-label="(?:Rated\s*)?([1-5])\s*(?:stars?|\/5)/i) ||
+    html.match(/aria-label="([1-5])\s*stars?"/i);
   if (starMatch && starMatch[1]) {
     starRating = parseInt(starMatch[1], 10);
   }
@@ -186,10 +218,23 @@ export function extractReviewDataFromHtml(html: string): {
     html.match(/<div class="daF0l">([^<]+)<\/div>/) ||
     html.match(/<h1 class="[^"]*DUwDvf[^"]*"[^>]*>([^<]+)<\/h1>/);
   if (shopMatch && shopMatch[1]) {
-    shopName = shopMatch[1].trim();
+    shopName = decodeHtmlEntities(shopMatch[1].trim());
+  }
+  if (!shopName) {
+    // Markdown lines fallback
+    const lines = html.split("\n").map((l) => l.trim()).filter(Boolean);
+    const placeIdx = lines.findIndex((l) => l.toLowerCase() === "place details");
+    if (placeIdx > 0) {
+      shopName = lines[placeIdx - 3] || lines[placeIdx - 2];
+    }
   }
 
-  return { reviewerName, reviewText, starRating, shopName };
+  return {
+    reviewerName: decodeHtmlEntities(reviewerName),
+    reviewText,
+    starRating,
+    shopName,
+  };
 }
 
 /**
@@ -269,6 +314,12 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
     }
   }
 
+  // Cloud / Serverless Headless Inspection (Cloudflare Workers & Vercel)
+  let extractedShopName: string | undefined = undefined;
+  let extractedStars: number | undefined = undefined;
+  let extractedReviewerName: string | undefined = undefined;
+  let extractedReviewText: string | undefined = undefined;
+
   // Cloudflare Workers with Browser Rendering (@cloudflare/puppeteer)
   if (!chromePath) {
     try {
@@ -278,14 +329,14 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
         const puppeteer = (await import("@cloudflare/puppeteer")).default;
         const browser = await puppeteer.launch((cf.env as any).MYBROWSER);
         const page = await browser.newPage();
-        await page.goto(targetUrl, { waitUntil: "networkidle0", timeout: 14000 });
+        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 10000 });
         const html = await page.content();
         await browser.close();
 
         if (
           html.includes("This review is no longer available") ||
           html.includes("review is unavailable") ||
-          (html.includes("Review not found") && !html.includes("aria-label"))
+          (html.includes("Review not found") && !html.includes("data-review-id") && !html.includes("Photo of"))
         ) {
           return {
             success: false,
@@ -296,96 +347,127 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
         }
 
         const parsed = extractReviewDataFromHtml(html);
-        return {
-          success: Boolean(parsed.reviewerName || parsed.shopName || parsed.reviewText || parsed.starRating),
-          shopName: parsed.shopName,
-          reviewerName: parsed.reviewerName,
-          reviewText: parsed.reviewText,
-          starRating: parsed.starRating,
-          reviewId: reviewId || undefined,
-        };
+        if (parsed.reviewerName) {
+          return {
+            success: true,
+            shopName: parsed.shopName,
+            reviewerName: parsed.reviewerName,
+            reviewText: parsed.reviewText,
+            starRating: parsed.starRating,
+            reviewId: reviewId || undefined,
+          };
+        }
       }
     } catch (cfPuppeteerErr) {
       console.warn("Cloudflare puppeteer execution warning:", cfPuppeteerErr);
     }
   }
 
-  // Serverless fallback: OpenGraph and Cloud Readers for serverless environments
-  let extractedShopName: string | undefined = undefined;
-  let extractedStars: number | undefined = undefined;
-  let extractedReviewerName: string | undefined = undefined;
-  let extractedReviewText: string | undefined = undefined;
+  // 1. Cloud Headless Reader (Jina Reader via shortlink)
+  // Fetching via the original shortlink (reviewUrl) allows Jina to bypass Google Maps botguard blocks.
+  const cleanReviewUrl = reviewUrl.trim().replace(/[?&]g_st=[^&]+/g, "");
+  const readerCandidates = [cleanReviewUrl, targetUrl];
 
-  // 1. Inspect OpenGraph metadata
-  try {
-    const ogRes = await fetch(targetUrl, {
-      headers: {
-        "User-Agent":
-          "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
-      redirect: "follow",
-    });
-    const ogHtml = await ogRes.text();
+  for (const candidateUrl of readerCandidates) {
+    if (extractedReviewerName) break;
+    try {
+      const jinaController = new AbortController();
+      const jinaTimeout = setTimeout(() => jinaController.abort(), 12000);
 
-    const ogTitleMatch =
-      ogHtml.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
-      ogHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
+      const jinaRes = await fetch(`https://r.jina.ai/${candidateUrl}`, {
+        signal: jinaController.signal,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+          "X-Return-Format": "html",
+        },
+      });
+      clearTimeout(jinaTimeout);
 
-    const ogDescMatch =
-      ogHtml.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
-      ogHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
+      if (jinaRes.ok) {
+        const fullContent = await jinaRes.text();
+        if (
+          fullContent.includes("This review is no longer available") ||
+          fullContent.includes("review is unavailable") ||
+          (fullContent.includes("Review not found") &&
+            !fullContent.includes("Photo of") &&
+            !fullContent.includes("data-review-id"))
+        ) {
+          return {
+            success: false,
+            isUnavailable: true,
+            shopName: extractedShopName,
+            error:
+              "Google Maps shows: 'This review is no longer available.' Google has suppressed or shadow-banned this review from public view (or it was deleted). Open the link in an Incognito tab to check: reviews must be publicly visible to earn rewards.",
+          };
+        }
 
-    if (ogTitleMatch && ogTitleMatch[1]) {
-      extractedShopName = ogTitleMatch[1].replace(/^Google review of\s*/i, "").trim();
-    }
-
-    if (ogDescMatch && ogDescMatch[1]) {
-      const starCount = (ogDescMatch[1].match(/★/g) || []).length;
-      if (starCount >= 1 && starCount <= 5) {
-        extractedStars = starCount;
+        const data = extractReviewDataFromHtml(fullContent);
+        if (data.reviewerName) extractedReviewerName = data.reviewerName;
+        if (data.reviewText) extractedReviewText = data.reviewText;
+        if (data.starRating) extractedStars = data.starRating;
+        if (data.shopName && !extractedShopName) extractedShopName = data.shopName;
       }
+    } catch (jinaErr) {
+      console.warn("Jina HTML reader fetch error:", jinaErr);
     }
-  } catch {}
 
-  // 2. Cloud Reader (if available)
-  try {
-    const jinaController = new AbortController();
-    const jinaTimeout = setTimeout(() => jinaController.abort(), 9000);
+    // Markdown fallback if HTML format did not yield reviewerName
+    if (!extractedReviewerName) {
+      try {
+        const jinaMdRes = await fetch(`https://r.jina.ai/${candidateUrl}`, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+          },
+        });
+        if (jinaMdRes.ok) {
+          const mdContent = await jinaMdRes.text();
+          const mdData = extractReviewDataFromHtml(mdContent);
+          if (mdData.reviewerName) extractedReviewerName = mdData.reviewerName;
+          if (mdData.reviewText && !extractedReviewText) extractedReviewText = mdData.reviewText;
+          if (mdData.starRating && !extractedStars) extractedStars = mdData.starRating;
+          if (mdData.shopName && !extractedShopName) extractedShopName = mdData.shopName;
+        }
+      } catch {}
+    }
+  }
 
-    const jinaRes = await fetch(`https://r.jina.ai/${targetUrl}`, {
-      signal: jinaController.signal,
-      headers: {
-        Accept: "text/plain",
-        "X-No-Cache": "true",
-      },
-    });
-    clearTimeout(jinaTimeout);
+  // 2. OpenGraph metadata fallback (for shopName and star rating)
+  if (!extractedShopName || !extractedStars) {
+    try {
+      const ogRes = await fetch(targetUrl, {
+        headers: {
+          "User-Agent":
+            "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+        redirect: "follow",
+      });
+      const ogHtml = await ogRes.text();
 
-    if (jinaRes.ok) {
-      const fullContent = await jinaRes.text();
-      if (
-        fullContent.includes("This review is no longer available") ||
-        fullContent.includes("review is unavailable") ||
-        fullContent.includes("Review not found") ||
-        (fullContent.includes("Unavailable") && !fullContent.includes("★★"))
-      ) {
-        return {
-          success: false,
-          isUnavailable: true,
-          shopName: extractedShopName,
-          error:
-            "Google Maps shows: 'This review is no longer available.' Google has suppressed or shadow-banned this review from public view (or it was deleted). Open the link in an Incognito tab to check: reviews must be publicly visible to earn rewards.",
-        };
+      const ogTitleMatch =
+        ogHtml.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
+        ogHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
+
+      const ogDescMatch =
+        ogHtml.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
+        ogHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
+
+      if (ogTitleMatch && ogTitleMatch[1] && !extractedShopName) {
+        extractedShopName = decodeHtmlEntities(
+          ogTitleMatch[1].replace(/^Google review of\s*/i, "").trim()
+        );
       }
 
-      const data = extractReviewDataFromHtml(fullContent);
-      if (data.reviewerName) extractedReviewerName = data.reviewerName;
-      if (data.reviewText) extractedReviewText = data.reviewText;
-      if (data.starRating) extractedStars = data.starRating;
-      if (data.shopName && !extractedShopName) extractedShopName = data.shopName;
-    }
-  } catch {}
+      if (ogDescMatch && ogDescMatch[1] && !extractedStars) {
+        const starCount = (ogDescMatch[1].match(/★/g) || []).length;
+        if (starCount >= 1 && starCount <= 5) {
+          extractedStars = starCount;
+        }
+      }
+    } catch {}
+  }
 
   return {
     success: Boolean(extractedShopName || extractedReviewerName || extractedStars || reviewId),
@@ -496,12 +578,12 @@ export function isReviewTextMatch(
     return { matches: false, reason: "No review text found on the store listing.", score: 0 };
   }
 
-  const normExp = expectedText
+  const normExp = (decodeHtmlEntities(expectedText) || expectedText)
     .toLowerCase()
     .replace(/[^a-z0-9]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  const normAct = actualText
+  const normAct = (decodeHtmlEntities(actualText) || actualText)
     .toLowerCase()
     .replace(/[^a-z0-9]/g, " ")
     .replace(/\s+/g, " ")
