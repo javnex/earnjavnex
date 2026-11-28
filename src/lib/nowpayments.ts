@@ -2,22 +2,22 @@ import crypto from "crypto";
 import { getEnv } from "@/lib/env";
 
 export function getNowpaymentsApiUrl(): string {
-  return getEnv("NOWPAYMENTS_API_URL") || "https://api.nowpayments.io/v1";
+  return (getEnv("NOWPAYMENTS_API_URL") || "https://api.nowpayments.io/v1").trim().replace(/^["']|["']$/g, "");
 }
 export function getNowpaymentsApiKey(): string {
-  return getEnv("NOWPAYMENTS_API_KEY") || "";
+  return (getEnv("NOWPAYMENTS_API_KEY") || "").trim().replace(/^["']|["']$/g, "");
 }
 export function getNowpaymentsEmail(): string {
-  return getEnv("NOWPAYMENTS_EMAIL") || "";
+  return (getEnv("NOWPAYMENTS_EMAIL") || "").trim().replace(/^["']|["']$/g, "");
 }
 export function getNowpaymentsPassword(): string {
-  return getEnv("NOWPAYMENTS_PASSWORD") || "";
+  return (getEnv("NOWPAYMENTS_PASSWORD") || "").trim().replace(/^["']|["']$/g, "");
 }
 export function getNowpayments2faSecret(): string {
-  return getEnv("NOWPAYMENTS_2FA_SECRET") || "";
+  return (getEnv("NOWPAYMENTS_2FA_SECRET") || "").trim().replace(/^["']|["']$/g, "");
 }
 export function getNowpaymentsIpnSecret(): string {
-  return getEnv("NOWPAYMENTS_IPN_SECRET") || "";
+  return (getEnv("NOWPAYMENTS_IPN_SECRET") || "").trim().replace(/^["']|["']$/g, "");
 }
 
 // In-memory cache for auth JWT
@@ -82,7 +82,12 @@ export async function getNowpaymentsAuthToken(): Promise<string> {
 
   const res = await fetch(`${apiUrl}/auth`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+    },
     body: JSON.stringify({
       email,
       password,
