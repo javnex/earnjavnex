@@ -1,14 +1,15 @@
-import "dotenv/config";
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
+type PrismaInstance = InstanceType<typeof PrismaClient>;
+
 const globalForPrisma = globalThis as unknown as {
-  prisma: InstanceType<typeof PrismaClient> | undefined;
+  prisma: PrismaInstance | undefined;
   pool: Pool | undefined;
 };
 
-function createPrismaClient(): InstanceType<typeof PrismaClient> {
+function createPrismaClient(): PrismaInstance {
   const connectionString =
     process.env.DATABASE_URL ||
     "postgresql://postgres:postgres@localhost:5432/postgres";
@@ -39,10 +40,21 @@ function createPrismaClient(): InstanceType<typeof PrismaClient> {
   });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+export function getPrisma(): PrismaInstance {
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = createPrismaClient();
+  }
+  return globalForPrisma.prisma;
 }
+
+// Lazy proxy prevents cold-start CPU/memory allocation of pg Pool & PrismaClient
+// on Workers requests that are fulfilled entirely via Supabase HTTP API.
+export const prisma: PrismaInstance = new Proxy({} as PrismaInstance, {
+  get(_target, prop) {
+    const client = getPrisma();
+    const value = Reflect.get(client, prop, client);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});
 
 export default prisma;

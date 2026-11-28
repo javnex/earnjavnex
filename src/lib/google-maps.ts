@@ -58,7 +58,6 @@ async function loadNodeModules() {
       os: osMod.default ?? osMod,
       path: pathMod.default ?? pathMod,
       spawn: cpMod.spawn,
-      execAsync: utilMod.promisify(cpMod.exec),
       execFileAsync: utilMod.promisify(cpMod.execFile),
     };
   } catch {
@@ -90,6 +89,45 @@ async function getRuntimeSecret(key: string): Promise<string | undefined> {
     if (val && val.trim()) return val.trim();
   }
   return undefined;
+}
+
+/**
+ * Reads only the leading bytes of an HTTP response (e.g. up to </head> or maxBytes)
+ * and cancels the remaining stream so large Google Maps HTML payloads never consume Worker RAM/CPU.
+ */
+async function readBoundedResponsePrefix(
+  res: Response,
+  maxBytes: number,
+  stopToken?: string
+): Promise<string> {
+  if (!res.body) {
+    const full = await res.text().catch(() => "");
+    return full.length > maxBytes ? full.slice(0, maxBytes) : full;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let total = 0;
+
+  try {
+    while (total < maxBytes) {
+      const { value, done } = await reader.read();
+      if (done || !value) break;
+      total += value.byteLength;
+      text += decoder.decode(value, { stream: true });
+      if (stopToken && text.toLowerCase().includes(stopToken)) {
+        break;
+      }
+    }
+    text += decoder.decode();
+  } catch {
+    // ignore partial stream errors after prefix captured
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+
+  return text;
 }
 
 /**
@@ -178,7 +216,7 @@ function stripTrackingParams(url: string): string {
 
 /**
  * Follows shortlink redirects (e.g. https://share.google/... or https://maps.app.goo.gl/...)
- * using native Web fetch() to get the final Google destination URL.
+ * using manual redirect hops so 0 KB of destination Maps HTML is buffered unnecessarily.
  */
 export async function resolveGoogleMapsUrl(url: string): Promise<string> {
   const trimmed = url.trim();
@@ -187,19 +225,59 @@ export async function resolveGoogleMapsUrl(url: string): Promise<string> {
     return trimmed;
   }
 
+  let current = trimmed;
+  let lastNetworkErr: unknown = null;
   try {
-    const res = await fetch(trimmed, {
-      method: "GET",
-      redirect: "follow",
-      headers: {
-        "User-Agent": CHROME_USER_AGENT,
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-      },
-    });
+    for (let hop = 0; hop < 6; hop++) {
+      let hopRes: Response | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 5000);
+        try {
+          hopRes = await fetch(current, {
+            method: attempt === 2 ? "HEAD" : "GET",
+            redirect: "manual",
+            signal: controller.signal,
+            headers: {
+              "User-Agent":
+                attempt === 2
+                  ? "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
+                  : CHROME_USER_AGENT,
+              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            },
+          });
+          lastNetworkErr = null;
+          break;
+        } catch (err) {
+          lastNetworkErr = err;
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, (attempt + 1) * 300));
+          }
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      if (!hopRes) break;
+      await hopRes.body?.cancel().catch(() => {});
 
-    if (res.url && res.url !== trimmed) {
-      return res.url;
+      const location = hopRes.headers.get("location");
+      if (location && hopRes.status >= 300 && hopRes.status < 400) {
+        current = new URL(location, current).toString();
+        if (
+          current.includes("google.com/maps/reviews/") ||
+          current.includes("google.com/maps/place/")
+        ) {
+          return current;
+        }
+        continue;
+      }
+      break;
+    }
+    if (current !== trimmed) {
+      return current;
+    }
+    if (lastNetworkErr) {
+      console.warn("fetch redirect resolution warning:", lastNetworkErr);
     }
   } catch (err) {
     console.warn("fetch redirect resolution warning:", err);
@@ -221,7 +299,7 @@ export async function resolveGoogleMapsUrl(url: string): Promise<string> {
     }
   }
 
-  return trimmed;
+  return current;
 }
 
 /**
@@ -265,7 +343,8 @@ function detectGoogleInterstitial(content: string, url?: string): "captcha" | "c
   if (lowerUrl.includes("/sorry/")) return "captcha";
   if (lowerUrl.includes("consent.google.com")) return "consent";
 
-  const lower = content.toLowerCase();
+  const headSlice = content.length > 48000 ? content.slice(0, 48000) : content;
+  const lower = headSlice.toLowerCase();
   if (
     lower.includes("unusual traffic from your computer network") ||
     lower.includes("our systems have detected unusual traffic") ||
@@ -276,8 +355,8 @@ function detectGoogleInterstitial(content: string, url?: string): "captcha" | "c
   }
   if (
     lower.includes("before you continue to google") &&
-    !content.includes("P9Vtnb") &&
-    !content.includes("PLACE DETAILS")
+    !headSlice.includes("P9Vtnb") &&
+    !headSlice.includes("PLACE DETAILS")
   ) {
     return "consent";
   }
@@ -337,18 +416,20 @@ export function extractReviewDataFromText(text: string): {
   let reviewText: string | undefined;
   let shopName: string | undefined;
 
-  const mdPhotoMatch = text.match(/!\[(?:Image\s*\d*:\s*)?Photo of ([^\]]+)\]/i);
+  // Bounded slice prevents multi-megabyte regex/line-split CPU exhaustion on raw HTML fallbacks
+  const boundedText = text.length > 65536 ? text.slice(0, 65536) : text;
+
+  const mdPhotoMatch = boundedText.match(/!\[(?:Image\s*\d*:\s*)?Photo of ([^\]]+)\]/i);
   if (mdPhotoMatch?.[1]) {
     reviewerName = mdPhotoMatch[1].trim();
   }
 
-  const lines = text
+  const lines = boundedText
     .split(/\r?\n/)
     .map((l) => l.replace(/\u00a0/g, " ").trim());
 
   const placeDetailsIdx = lines.findIndex((l) => /^place details$/i.test(l));
 
-  // Extract Shop Name and Reviewer Name around the "PLACE DETAILS" landmark
   if (placeDetailsIdx > 0) {
     let headerEndIdx = -1;
     for (let i = Math.max(0, placeDetailsIdx - 12); i < placeDetailsIdx; i++) {
@@ -437,16 +518,21 @@ export function extractReviewDataFromHtml(html: string): {
   let starRating: number | undefined;
   let shopName: string | undefined;
 
-  // 1. Reviewer Author Name (HTML DOM matchers)
-  const ariaActionMatch = html.match(/aria-label="Actions for ([^"]+?)(?:['’]s|s['’])\s+review"/i);
+  // Strip heavy inline scripts/styles before running DOM regexes
+  const cleanHtml =
+    html.length > 262144
+      ? html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "")
+      : html;
+
+  const ariaActionMatch = cleanHtml.match(/aria-label="Actions for ([^"]+?)(?:['’]s|s['’])\s+review"/i);
   if (ariaActionMatch?.[1]) {
     reviewerName = ariaActionMatch[1].trim();
   }
 
   if (!reviewerName) {
-    const btnRegex = /<button[^>]*class="[^"]*(?:P9Vtnb|fontTitleSmall)[^"]*"[^>]*>([\s\S]*?)<\/button>/gi;
+    const btnRegex = /<button[^>]*class=["'][^"']*(?:P9Vtnb|fontTitleSmall)[^"']*["'][^>]*>([\s\S]*?)<\/button>/gi;
     let m: RegExpExecArray | null;
-    while ((m = btnRegex.exec(html)) !== null) {
+    while ((m = btnRegex.exec(cleanHtml)) !== null) {
       const cleaned = m[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
       if (cleaned && !isUiChromeOrIconLine(cleaned)) {
         reviewerName = cleaned;
@@ -456,7 +542,7 @@ export function extractReviewDataFromHtml(html: string): {
   }
 
   if (!reviewerName) {
-    const biIqbMatch = html.match(/<div[^>]*class="[^"]*biIqb[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+    const biIqbMatch = cleanHtml.match(/<div[^>]*class=["'][^"']*biIqb[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
     if (biIqbMatch?.[1]) {
       const innerBtns = biIqbMatch[1].matchAll(/<button[^>]*>([\s\S]*?)<\/button>/gi);
       for (const btn of innerBtns) {
@@ -470,16 +556,17 @@ export function extractReviewDataFromHtml(html: string): {
   }
 
   if (!reviewerName) {
-    const altMatch = html.match(/alt="Photo of ([^"]+)"/i) || html.match(/aria-label="Photo of ([^"]+)"/i);
+    const altMatch =
+      cleanHtml.match(/alt=["']Photo of ([^"']+)["']/i) ||
+      cleanHtml.match(/aria-label=["']Photo of ([^"']+)["']/i);
     if (altMatch?.[1]) {
       reviewerName = altMatch[1].trim();
     }
   }
 
-  // 2. Review Text (HTML DOM matchers - supports inline <br> tags)
   const rawHtmlTextMatch =
-    html.match(/<span class="wiI7pd">([\s\S]*?)<\/span>/) ||
-    html.match(/class="MyEned"[^>]*><span[^>]*>([\s\S]*?)<\/span>/);
+    cleanHtml.match(/<span class="wiI7pd">([\s\S]*?)<\/span>/) ||
+    cleanHtml.match(/class="MyEned"[^>]*><span[^>]*>([\s\S]*?)<\/span>/);
   if (rawHtmlTextMatch?.[1]) {
     const stripped = rawHtmlTextMatch[1]
       .replace(/<br\s*\/?>/gi, " ")
@@ -491,27 +578,26 @@ export function extractReviewDataFromHtml(html: string): {
     }
   }
 
-  // 3. Star Rating (HTML DOM aria-label matchers)
   const starMatch =
-    html.match(/<span class="kvMYJc"[^>]*aria-label="([1-5])\s*stars?"/i) ||
-    html.match(/role="img"[^>]*aria-label="([1-5])\s*stars?"/i) ||
-    html.match(/aria-label="(?:Rated\s*)?([1-5])\s*(?:stars?|\/5)/i) ||
-    html.match(/aria-label="([1-5])\s*stars?"/i);
+    cleanHtml.match(/<span class="kvMYJc"[^>]*aria-label="([1-5])\s*stars?"/i) ||
+    cleanHtml.match(/role="img"[^>]*aria-label="([1-5])\s*stars?"/i) ||
+    cleanHtml.match(/aria-label="(?:Rated\s*)?([1-5])\s*(?:stars?|\/5)/i) ||
+    cleanHtml.match(/aria-label="([1-5])\s*stars?"/i);
   if (starMatch?.[1]) {
     starRating = parseInt(starMatch[1], 10);
   }
 
-  // 4. Shop Name (HTML DOM matchers)
   const shopMatch =
-    html.match(/<div class="daF0l">([^<]+)<\/div>/) ||
-    html.match(/<h1 class="[^"]*DUwDvf[^"]*"[^>]*>([^<]+)<\/h1>/);
+    cleanHtml.match(/<div class="daF0l">([^<]+)<\/div>/) ||
+    cleanHtml.match(/<h1 class="[^"]*DUwDvf[^"]*"[^>]*>([^<]+)<\/h1>/);
   if (shopMatch?.[1]) {
     shopName = decodeHtmlEntities(shopMatch[1].trim());
   }
 
-  // 5. Fallback to rendered text/markdown parser when HTML selectors are absent (e.g. Jina Reader)
-  if (!reviewerName || !reviewText || !shopName) {
-    const textParsed = extractReviewDataFromText(html);
+  // Only invoke line-based text extraction if content looks like rendered text/markdown (not raw HTML document)
+  const looksLikeRawHtmlDoc = /^\s*<!doctype|^\s*<html/i.test(cleanHtml);
+  if (!looksLikeRawHtmlDoc && (!reviewerName || !reviewText || !shopName)) {
+    const textParsed = extractReviewDataFromText(cleanHtml);
     if (!reviewerName && textParsed.reviewerName) reviewerName = textParsed.reviewerName;
     if (!reviewText && textParsed.reviewText) reviewText = textParsed.reviewText;
     if (!shopName && textParsed.shopName) shopName = textParsed.shopName;
@@ -612,8 +698,253 @@ function parseRenderedHtmlResult(
   };
 }
 
+const CDP_EVALUATE_EXPRESSION = `(() => {
+  const href = window.location.href || '';
+  if (href.includes('consent.google.com')) {
+    const consentBtn = document.querySelector('button[aria-label*="Reject all"], button[aria-label*="Accept all"], form button[type="submit"]');
+    if (consentBtn) consentBtn.click();
+    return { consent: true };
+  }
+  const bodyText = document.body ? document.body.innerText : '';
+  if (href.includes('/sorry/') || bodyText.includes('unusual traffic') || document.querySelector('#captcha-form, .g-recaptcha')) {
+    return { isCaptcha: true };
+  }
+  if (bodyText.includes('This review is no longer available') || bodyText.includes('review is unavailable')) {
+    const shopEl = document.querySelector('.daF0l, h1.DUwDvf');
+    return { unavail: true, shop: shopEl?.textContent?.trim() || undefined };
+  }
+  const btn = document.querySelector('button.P9Vtnb');
+  const fontBtns = document.querySelectorAll('button.fontTitleSmall');
+  let btnAuthor = btn?.textContent?.trim();
+  if (!btnAuthor) {
+    for (const b of fontBtns) {
+      const t = b.textContent?.trim();
+      if (t && t !== '...' && t !== '⋯') { btnAuthor = t; break; }
+    }
+  }
+  const actionEl = document.querySelector('[aria-label*="Actions for"]');
+  const actionAuthor = (actionEl?.getAttribute('aria-label') || '').replace(/^Actions for\\s+|[’']s review$/gi, '').trim();
+  const photoEl = document.querySelector('img[alt*="Photo of"], [aria-label*="Photo of"]');
+  const photoAuthor = (photoEl?.getAttribute('alt') || photoEl?.getAttribute('aria-label') || '').replace(/^Photo of\\s+/i, '').trim();
+  const author = btnAuthor || actionAuthor || photoAuthor || undefined;
+
+  const starEl =
+    document.querySelector('.kvMYJc') ||
+    document.querySelector('[role="img"][aria-label*="star"]:not([aria-label*="."])');
+  const revEl = document.querySelector('.wiI7pd, .MyEned span');
+  const shopEl = document.querySelector('.daF0l, h1.DUwDvf');
+  const idEl = document.querySelector('[data-review-id]');
+  return {
+    author,
+    starAria: starEl?.getAttribute('aria-label') || undefined,
+    hasExactStarEl: Boolean(document.querySelector('.kvMYJc')),
+    review: revEl?.textContent?.trim() || undefined,
+    shop: shopEl?.textContent?.trim() || undefined,
+    reviewId: idEl?.getAttribute('data-review-id') || undefined,
+  };
+})()`;
+
 /**
- * Local Node headless Chrome scraper using CDP event polling (stops immediately once author or unavailability renders).
+ * Shared raw Chrome DevTools Protocol (CDP) WebSocket extractor used by both
+ * local Chromium and Cloudflare MYBROWSER without pulling @cloudflare/puppeteer.
+ */
+async function runCdpReviewExtraction(options: {
+  ws: WebSocket;
+  useBrowserTarget: boolean;
+  closeBrowser: boolean;
+  candidateUrl: string;
+  fallbackReviewId: string | null;
+  sourceLabel: string;
+  diagPrefix: string;
+  maxPollTicks: number;
+  diagnostics: string[];
+}): Promise<LiveReviewScrapeResult | null> {
+  const {
+    ws,
+    useBrowserTarget,
+    closeBrowser,
+    candidateUrl,
+    fallbackReviewId,
+    sourceLabel,
+    diagPrefix,
+    maxPollTicks,
+    diagnostics,
+  } = options;
+
+  let msgId = 1;
+  const pending = new Map<number, (v: any) => void>();
+
+  const onMessage = (ev: any) => {
+    try {
+      const parsed = JSON.parse(String(ev.data));
+      if (parsed.id && pending.has(parsed.id)) {
+        const fn = pending.get(parsed.id)!;
+        pending.delete(parsed.id);
+        fn(parsed.result ?? null);
+      }
+    } catch {
+      // ignore non-JSON or event payloads
+    }
+  };
+
+  ws.addEventListener("message", onMessage);
+
+  const send = (method: string, params: Record<string, any> = {}, sessionId?: string) =>
+    new Promise<any>((resolve) => {
+      try {
+        const id = msgId++;
+        const timer = setTimeout(() => {
+          pending.delete(id);
+          resolve(null);
+        }, 4500);
+        pending.set(id, (val) => {
+          clearTimeout(timer);
+          resolve(val);
+        });
+        ws.send(JSON.stringify(sessionId ? { id, method, params, sessionId } : { id, method, params }));
+      } catch {
+        resolve(null);
+      }
+    });
+
+  try {
+    let sessionId: string | undefined;
+    if (useBrowserTarget) {
+      const created = await send("Target.createTarget", { url: "about:blank" });
+      const targetId = created?.targetId;
+      if (!targetId) {
+        diagnostics.push(`${diagPrefix}=no_target`);
+        return null;
+      }
+      const attached = await send("Target.attachToTarget", { targetId, flatten: true });
+      sessionId = attached?.sessionId;
+      if (!sessionId) {
+        diagnostics.push(`${diagPrefix}=no_session`);
+        return null;
+      }
+    }
+
+    await send("Network.enable", {}, sessionId);
+    await send(
+      "Network.setUserAgentOverride",
+      { userAgent: CHROME_USER_AGENT, acceptLanguage: "en-US,en;q=0.9" },
+      sessionId
+    );
+    await send(
+      "Emulation.setDeviceMetricsOverride",
+      { width: 1366, height: 768, deviceScaleFactor: 1, mobile: false },
+      sessionId
+    );
+    await send("Page.enable", {}, sessionId);
+    await send(
+      "Page.addScriptToEvaluateOnNewDocument",
+      {
+        source:
+          "Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });",
+      },
+      sessionId
+    );
+
+    await send("Page.navigate", { url: candidateUrl }, sessionId);
+
+    let lastPartial: any = null;
+    let recordedConsent = false;
+
+    for (let tick = 0; tick < maxPollTicks; tick++) {
+      await new Promise((r) => setTimeout(r, 400));
+      const evalRes = await send(
+        "Runtime.evaluate",
+        { returnByValue: true, expression: CDP_EVALUATE_EXPRESSION },
+        sessionId
+      );
+
+      const val = evalRes?.result?.value;
+      if (!val) continue;
+
+      if (val.consent) {
+        if (!recordedConsent) {
+          diagnostics.push(`${diagPrefix}=consent_gate`);
+          recordedConsent = true;
+        }
+        continue;
+      }
+
+      if (val.isCaptcha) {
+        diagnostics.push(`${diagPrefix}=captcha`);
+        return null;
+      }
+
+      if (val.unavail) {
+        diagnostics.push(`${diagPrefix}=unavailable`);
+        return {
+          success: false,
+          isUnavailable: true,
+          shopName: decodeHtmlEntities(val.shop),
+          source: sourceLabel,
+          error: UNAVAILABLE_REVIEW_ERROR,
+        };
+      }
+
+      lastPartial = val;
+
+      if (val.author && !isUiChromeOrIconLine(val.author)) {
+        // Give review text and exact .kvMYJc star widget a brief beat to settle
+        let settled = val;
+        if ((!val.review || !val.hasExactStarEl) && tick < maxPollTicks - 4) {
+          await new Promise((r) => setTimeout(r, 400));
+          const reEval = await send(
+            "Runtime.evaluate",
+            { returnByValue: true, expression: CDP_EVALUATE_EXPRESSION },
+            sessionId
+          );
+          if (reEval?.result?.value?.author) {
+            settled = reEval.result.value;
+          }
+        }
+        const starMatch = settled.starAria?.match(/^\s*([1-5])\s*stars?/i);
+        diagnostics.push(`${diagPrefix}=ok`);
+        return {
+          success: true,
+          shopName: decodeHtmlEntities(settled.shop),
+          reviewerName: decodeHtmlEntities(settled.author),
+          reviewText: decodeHtmlEntities(settled.review),
+          starRating: starMatch ? parseInt(starMatch[1], 10) : undefined,
+          reviewId: settled.reviewId || fallbackReviewId || undefined,
+          source: sourceLabel,
+        };
+      }
+    }
+
+    if (lastPartial && (lastPartial.shop || lastPartial.starAria || lastPartial.review)) {
+      const starMatch = lastPartial.starAria?.match(/([1-5])/);
+      diagnostics.push(`${diagPrefix}=partial_no_author`);
+      return {
+        success: true,
+        shopName: decodeHtmlEntities(lastPartial.shop),
+        reviewText: decodeHtmlEntities(lastPartial.review),
+        starRating: starMatch ? parseInt(starMatch[1], 10) : undefined,
+        reviewId: lastPartial.reviewId || fallbackReviewId || undefined,
+        source: sourceLabel,
+      };
+    }
+
+    diagnostics.push(`${diagPrefix}=timeout`);
+    return null;
+  } finally {
+    if (closeBrowser) {
+      await Promise.race([
+        send("Browser.close"),
+        new Promise((r) => setTimeout(r, 800)),
+      ]).catch(() => {});
+    }
+    try {
+      ws.close();
+    } catch {}
+  }
+}
+
+/**
+ * Local Node headless Chrome scraper using shared browser-level CDP extraction.
  * Falls back to --dump-dom if CDP socket startup fails.
  */
 async function scrapeWithLocalChrome(
@@ -647,7 +978,6 @@ async function scrapeWithLocalChrome(
     { stdio: "ignore" }
   );
 
-  let ws: WebSocket | null = null;
   try {
     let port: string | null = null;
     const portFile = path.join(tmpProfile, "DevToolsActivePort");
@@ -663,9 +993,16 @@ async function scrapeWithLocalChrome(
     }
 
     if (port && typeof WebSocket !== "undefined") {
+      let browserWsUrl = "";
       let pageWsUrl = "";
       for (let i = 0; i < 15; i++) {
         try {
+          const verRes = await fetch(`http://127.0.0.1:${port}/json/version`);
+          const verData: any = await verRes.json();
+          if (verData?.webSocketDebuggerUrl) {
+            browserWsUrl = verData.webSocketDebuggerUrl;
+            break;
+          }
           const listRes = await fetch(`http://127.0.0.1:${port}/json/list`);
           const targets: any[] = await listRes.json();
           const pageTarget = targets.find((t) => t.type === "page" && t.webSocketDebuggerUrl) || targets[0];
@@ -677,114 +1014,38 @@ async function scrapeWithLocalChrome(
         await new Promise((r) => setTimeout(r, 150));
       }
 
-      if (pageWsUrl) {
-        ws = new WebSocket(pageWsUrl);
-        let msgId = 1;
-        const pending = new Map<number, (v: any) => void>();
-        const send = (method: string, params: any = {}) =>
-          new Promise<any>((resolve, reject) => {
-            if (!ws) return reject(new Error("WebSocket closed"));
-            const id = msgId++;
-            const timer = setTimeout(() => {
-              pending.delete(id);
-              resolve(null);
-            }, 5000);
-            pending.set(id, (val) => {
-              clearTimeout(timer);
-              resolve(val);
-            });
-            ws.send(JSON.stringify({ id, method, params }));
-          });
-
+      const wsUrl = browserWsUrl || pageWsUrl;
+      if (wsUrl) {
+        const ws = new WebSocket(wsUrl);
         await new Promise<void>((resolve, reject) => {
           const timer = setTimeout(() => reject(new Error("CDP connect timeout")), 4000);
-          ws!.addEventListener("open", () => {
+          ws.addEventListener("open", () => {
             clearTimeout(timer);
             resolve();
           });
-          ws!.addEventListener("error", () => {
+          ws.addEventListener("error", () => {
             clearTimeout(timer);
             reject(new Error("CDP ws error"));
           });
         });
 
-        ws.addEventListener("message", (ev: any) => {
-          try {
-            const parsed = JSON.parse(String(ev.data));
-            if (parsed.id && pending.has(parsed.id)) {
-              const fn = pending.get(parsed.id)!;
-              pending.delete(parsed.id);
-              fn(parsed.result);
-            }
-          } catch {}
+        const cdpRes = await runCdpReviewExtraction({
+          ws,
+          useBrowserTarget: Boolean(browserWsUrl),
+          closeBrowser: false,
+          candidateUrl: targetUrl,
+          fallbackReviewId,
+          sourceLabel: "local-chrome-cdp",
+          diagPrefix: "local_chrome",
+          maxPollTicks: 34,
+          diagnostics,
         });
-
-        await send("Network.enable");
-        await send("Network.setUserAgentOverride", { userAgent: CHROME_USER_AGENT });
-        await send("Page.navigate", { url: targetUrl });
-
-        for (let tick = 0; tick < 36; tick++) {
-          await new Promise((r) => setTimeout(r, 400));
-          const evalRes = await send("Runtime.evaluate", {
-            returnByValue: true,
-            expression: `(() => {
-              const bodyText = document.body ? document.body.innerText : '';
-              const unavail = bodyText.includes('This review is no longer available') || bodyText.includes('review is unavailable');
-              const btn = document.querySelector('button.P9Vtnb, button.fontTitleSmall');
-              const actionEl = document.querySelector('[aria-label*="Actions for"]');
-              const starEl = document.querySelector('.kvMYJc, [role="img"][aria-label*="star"]');
-              const revEl = document.querySelector('.wiI7pd, .MyEned span');
-              const shopEl = document.querySelector('.daF0l, h1.DUwDvf');
-              const idEl = document.querySelector('[data-review-id]');
-              return {
-                unavail,
-                author: btn?.textContent?.trim() || (actionEl?.getAttribute('aria-label') || '').replace(/^Actions for\\s+|[’']s review$/gi, '').trim() || undefined,
-                starAria: starEl?.getAttribute('aria-label') || undefined,
-                review: revEl?.textContent?.trim() || undefined,
-                shop: shopEl?.textContent?.trim() || undefined,
-                reviewId: idEl?.getAttribute('data-review-id') || undefined,
-              };
-            })()`,
-          });
-
-          const val = evalRes?.result?.value;
-          if (val?.unavail) {
-            diagnostics.push("local_chrome=unavailable");
-            return {
-              success: false,
-              isUnavailable: true,
-              shopName: decodeHtmlEntities(val.shop),
-              source: "local-chrome-cdp",
-              error: UNAVAILABLE_REVIEW_ERROR,
-            };
-          }
-
-          if (val?.author) {
-            if (!val.review && tick < 20) {
-              await new Promise((r) => setTimeout(r, 350));
-            }
-            const starMatch = val.starAria?.match(/([1-5])/);
-            diagnostics.push("local_chrome=ok");
-            return {
-              success: true,
-              shopName: decodeHtmlEntities(val.shop),
-              reviewerName: decodeHtmlEntities(val.author),
-              reviewText: decodeHtmlEntities(val.review),
-              starRating: starMatch ? parseInt(starMatch[1], 10) : undefined,
-              reviewId: val.reviewId || fallbackReviewId || undefined,
-              source: "local-chrome-cdp",
-            };
-          }
-        }
-        diagnostics.push("local_chrome=timeout");
+        if (cdpRes) return cdpRes;
       }
     }
   } catch (cdpErr) {
     diagnostics.push(`local_chrome_cdp_err=${cdpErr instanceof Error ? cdpErr.message : "err"}`);
   } finally {
-    try {
-      ws?.close();
-    } catch {}
     try {
       proc.kill();
     } catch {}
@@ -815,11 +1076,7 @@ async function scrapeWithLocalChrome(
       diagnostics.push("local_dump=unavailable");
       return parsedDump.result;
     }
-    if (parsedDump.result?.reviewerName) {
-      diagnostics.push("local_dump=ok");
-    } else {
-      diagnostics.push("local_dump=no_author");
-    }
+    diagnostics.push(parsedDump.result?.reviewerName ? "local_dump=ok" : "local_dump=no_author");
     return parsedDump.result || null;
   } catch {
     diagnostics.push("local_dump=err");
@@ -832,8 +1089,7 @@ async function scrapeWithLocalChrome(
 }
 
 /**
- * Cloudflare Workers Browser Rendering (@cloudflare/puppeteer via MYBROWSER binding).
- * Uses stealth masking, fast CAPTCHA/consent bail-out, and guarantees browser.close().
+ * Cloudflare Workers Browser Rendering via direct WebSocket CDP (zero Puppeteer bundle overhead).
  */
 async function scrapeWithCloudflareBrowser(
   candidateUrls: string[],
@@ -847,176 +1103,73 @@ async function scrapeWithCloudflareBrowser(
     return null;
   }
 
-  let browser: any = null;
+  const candidateUrl = candidateUrls[0];
+  if (!candidateUrl) return null;
+
   try {
-    const puppeteer = (await import("@cloudflare/puppeteer")).default;
-    browser = await puppeteer.launch(browserBinding);
-    const page = await browser.newPage();
-
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, "webdriver", { get: () => undefined });
-      Object.defineProperty(navigator, "languages", { get: () => ["en-US", "en"] });
+    const acquireRes = await browserBinding.fetch("https://fake.host/v1/devtools/browser", {
+      method: "POST",
     });
-    await page.setViewport({ width: 1366, height: 768 });
-    await page.setUserAgent(CHROME_USER_AGENT);
-    await page.setExtraHTTPHeaders({ "Accept-Language": "en-US,en;q=0.9" });
 
-    for (const candidateUrl of candidateUrls.slice(0, 2)) {
-      await page.goto(candidateUrl, { waitUntil: "domcontentloaded", timeout: 10000 });
-
-      if (page.url().includes("consent.google.com")) {
-        diagnostics.push("mybrowser=consent_gate");
-        try {
-          await page.evaluate(() => {
-            const btn = document.querySelector<HTMLButtonElement>(
-              'button[aria-label*="Reject all"], button[aria-label*="Accept all"], form button[type="submit"]'
-            );
-            btn?.click();
-          });
-          await page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 5000 }).catch(() => {});
-        } catch {}
+    if (!acquireRes.ok) {
+      if (acquireRes.status === 429) {
+        diagnostics.push("mybrowser=quota_429");
+      } else {
+        diagnostics.push(`mybrowser=acquire_${acquireRes.status}`);
       }
-
-      await page
-        .waitForFunction(
-          () => {
-            const href = window.location.href;
-            if (href.includes("/sorry/")) return true;
-            const bodyText = document.body ? document.body.innerText : "";
-            if (
-              bodyText.includes("unusual traffic") ||
-              bodyText.includes("This review is no longer available") ||
-              bodyText.includes("review is unavailable")
-            ) {
-              return true;
-            }
-            const authorBtn = document.querySelector("button.P9Vtnb");
-            if (authorBtn?.textContent?.trim()) return true;
-            const actionEl = document.querySelector('[aria-label*="Actions for"]');
-            if (actionEl) return true;
-            const photoEl = document.querySelector('img[alt*="Photo of"]');
-            if (photoEl) return true;
-            return false;
-          },
-          { timeout: 9000, polling: 250 }
-        )
-        .catch(() => {});
-
-      const domEval = await page.evaluate(() => {
-        const bodyText = document.body ? document.body.innerText : "";
-        const unavail =
-          bodyText.includes("This review is no longer available") ||
-          bodyText.includes("review is unavailable");
-        const isCaptcha =
-          window.location.href.includes("/sorry/") ||
-          bodyText.includes("unusual traffic") ||
-          Boolean(document.querySelector("#captcha-form, .g-recaptcha"));
-        const btn = document.querySelector("button.P9Vtnb, button.fontTitleSmall");
-        const starEl = document.querySelector('.kvMYJc, [role="img"][aria-label*="star"]');
-        const revEl = document.querySelector(".wiI7pd, .MyEned span");
-        const shopEl = document.querySelector(".daF0l, h1.DUwDvf");
-        const idEl = document.querySelector("[data-review-id]");
-        return {
-          unavail,
-          isCaptcha,
-          currentUrl: window.location.href,
-          author: btn?.textContent?.trim() || undefined,
-          starAria: starEl?.getAttribute("aria-label") || undefined,
-          review: revEl?.textContent?.trim() || undefined,
-          shop: shopEl?.textContent?.trim() || undefined,
-          reviewId: idEl?.getAttribute("data-review-id") || undefined,
-        };
-      });
-
-      if (domEval?.isCaptcha) {
-        diagnostics.push("mybrowser=captcha");
-        return null;
-      }
-
-      if (domEval?.unavail) {
-        diagnostics.push("mybrowser=unavailable");
-        return {
-          success: false,
-          isUnavailable: true,
-          shopName: decodeHtmlEntities(domEval.shop),
-          source: "cloudflare-mybrowser",
-          error: UNAVAILABLE_REVIEW_ERROR,
-        };
-      }
-
-      const html = await page.content();
-      const htmlParsed = parseRenderedHtmlResult(
-        html,
-        "cloudflare-mybrowser",
-        fallbackReviewId,
-        domEval?.currentUrl
-      );
-
-      if (htmlParsed.captcha) {
-        diagnostics.push("mybrowser=captcha");
-        return null;
-      }
-      if (htmlParsed.unavailable && htmlParsed.result) {
-        diagnostics.push("mybrowser=unavailable");
-        return htmlParsed.result;
-      }
-
-      const evalStarMatch = domEval?.starAria?.match(/([1-5])/);
-      const starRating =
-        (evalStarMatch ? parseInt(evalStarMatch[1], 10) : undefined) || htmlParsed.result?.starRating;
-      const authorCandidate = decodeHtmlEntities(domEval?.author);
-      const reviewerName =
-        (authorCandidate && !isUiChromeOrIconLine(authorCandidate) ? authorCandidate : undefined) ||
-        htmlParsed.result?.reviewerName;
-      const reviewText = decodeHtmlEntities(domEval?.review) || htmlParsed.result?.reviewText;
-      const shopName = decodeHtmlEntities(domEval?.shop) || htmlParsed.result?.shopName;
-
-      if (reviewerName) {
-        diagnostics.push("mybrowser=ok");
-        return {
-          success: true,
-          shopName,
-          reviewerName,
-          reviewText,
-          starRating,
-          reviewId: domEval?.reviewId || htmlParsed.result?.reviewId || fallbackReviewId || undefined,
-          source: "cloudflare-mybrowser",
-        };
-      }
-
-      if (shopName || reviewText || starRating) {
-        diagnostics.push("mybrowser=partial_no_author");
-        return {
-          success: true,
-          shopName,
-          reviewText,
-          starRating,
-          reviewId: domEval?.reviewId || htmlParsed.result?.reviewId || fallbackReviewId || undefined,
-          source: "cloudflare-mybrowser",
-        };
-      }
+      await acquireRes.body?.cancel().catch(() => {});
+      return null;
     }
 
-    diagnostics.push("mybrowser=no_author");
+    const acquired: any = await acquireRes.json().catch(() => null);
+    const sessionId = acquired?.sessionId;
+    if (!sessionId) {
+      diagnostics.push("mybrowser=no_session_id");
+      return null;
+    }
+
+    const wsRes = await browserBinding.fetch(`https://fake.host/v1/devtools/browser/${sessionId}`, {
+      headers: {
+        Upgrade: "websocket",
+        "cf-brapi-client": "@cloudflare/puppeteer@2.0.1",
+      },
+    });
+
+    const ws: WebSocket | undefined = (wsRes as any)?.webSocket;
+    if (!ws) {
+      diagnostics.push(`mybrowser=ws_${wsRes.status}`);
+      await wsRes.body?.cancel().catch(() => {});
+      return null;
+    }
+
+    // Cloudflare Worker accepted WebSocket is immediately open after accept()
+    (ws as any).accept();
+
+    return await runCdpReviewExtraction({
+      ws,
+      useBrowserTarget: true,
+      closeBrowser: true,
+      candidateUrl,
+      fallbackReviewId,
+      sourceLabel: "cloudflare-mybrowser",
+      diagPrefix: "mybrowser",
+      maxPollTicks: 22,
+      diagnostics,
+    });
   } catch (err: any) {
     const msg = String(err?.message || err || "");
-    if (msg.includes("429") || msg.toLowerCase().includes("rate limit") || msg.toLowerCase().includes("time limit")) {
-      diagnostics.push("mybrowser=quota_429");
-    } else {
-      diagnostics.push(`mybrowser=err(${msg.slice(0, 48)})`);
-    }
-    console.warn("Cloudflare puppeteer warning:", msg);
-  } finally {
-    if (browser) {
-      await browser.close().catch(() => {});
-    }
+    diagnostics.push(
+      msg.includes("429") || msg.toLowerCase().includes("time limit")
+        ? "mybrowser=quota_429"
+        : `mybrowser=err(${msg.slice(0, 40)})`
+    );
+    return null;
   }
-
-  return null;
 }
 
 /**
- * Fetches OpenGraph metadata (shop name and exact filled-star count ★).
+ * Fetches OpenGraph metadata using a bounded 20 KB prefix reader so large Maps bodies
+ * are aborted as soon as </head> arrives.
  */
 async function fetchOpenGraphMetadata(
   candidateUrls: string[],
@@ -1036,17 +1189,18 @@ async function fetchOpenGraphMetadata(
       });
 
       if (!ogRes.ok) {
+        await ogRes.body?.cancel().catch(() => {});
         diagnostics.push(`og=${ogRes.status}`);
         continue;
       }
 
-      const ogHtml = await ogRes.text();
+      const headHtml = await readBoundedResponsePrefix(ogRes, 20480, "</head>");
       const ogTitleMatch =
-        ogHtml.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
-        ogHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
+        headHtml.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
+        headHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
       const ogDescMatch =
-        ogHtml.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
-        ogHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
+        headHtml.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
+        headHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
 
       let shopName: string | undefined;
       let starRating: number | undefined;
@@ -1132,10 +1286,11 @@ async function queryJinaEndpoint(
 
     const res = await fetch(endpoint, init);
     if (!res.ok) {
+      await res.body?.cancel().catch(() => {});
       return { status: res.status };
     }
 
-    const content = await res.text();
+    const content = await readBoundedResponsePrefix(res, 65536);
     if (isReviewUnavailableContent(content)) {
       const parsed = extractReviewDataFromText(content);
       return { status: res.status, unavailable: true, shopName: parsed.shopName };
@@ -1177,16 +1332,16 @@ async function fetchViaJina(
   let fallbackText: string | undefined;
 
   for (const candidateUrl of candidateUrls) {
-    // 1. Primary GET text snapshot
     let res = await queryJinaEndpoint(candidateUrl, "text", "GET", jinaApiKey);
-    diagnostics.push(`jina_get_text=${res.status}${res.reviewerName ? "(author)" : res.captcha ? "(captcha)" : res.consent ? "(consent)" : ""}`);
+    diagnostics.push(
+      `jina_get_text=${res.status}${res.reviewerName ? "(author)" : res.captcha ? "(captcha)" : res.consent ? "(consent)" : ""}`
+    );
 
     if (res.unavailable) return { isUnavailable: true, shopName: res.shopName };
     if (res.reviewerName) return res;
     if (res.shopName) fallbackShop = fallbackShop || res.shopName;
     if (res.reviewText) fallbackText = fallbackText || res.reviewText;
 
-    // 2. If GET failed (e.g. HTTP 403/429/0), try POST endpoint once
     if (res.status !== 200) {
       const postRes = await queryJinaEndpoint(candidateUrl, "text", "POST", jinaApiKey);
       diagnostics.push(`jina_post_text=${postRes.status}${postRes.reviewerName ? "(author)" : ""}`);
@@ -1195,14 +1350,12 @@ async function fetchViaJina(
       if (postRes.shopName) fallbackShop = fallbackShop || postRes.shopName;
       if (postRes.reviewText) fallbackText = fallbackText || postRes.reviewText;
 
-      // Hard stop if both GET and POST were rate-limited or blocked at IP/edge level
       if ((res.status === 429 || res.status === 403) && (postRes.status === 429 || postRes.status === 403)) {
         break;
       }
       if (postRes.status !== 200) continue;
     }
 
-    // 3. Fallback to Markdown mode (preserves ![Image: Photo of Author]) on valid 200 render
     res = await queryJinaEndpoint(candidateUrl, "markdown", "GET", jinaApiKey);
     diagnostics.push(`jina_get_md=${res.status}${res.reviewerName ? "(author)" : ""}`);
     if (res.unavailable) return { isUnavailable: true, shopName: res.shopName };
@@ -1248,6 +1401,7 @@ async function fetchViaExternalBrowserProvider(
           });
 
     if (!res.ok) {
+      await res.body?.cancel().catch(() => {});
       diagnostics.push(`${provider}=${res.status}`);
       return null;
     }
@@ -1279,7 +1433,7 @@ async function fetchViaExternalBrowserProvider(
 
 /**
  * Scrapes live Google Maps review DOM using local headless Chromium (Node dev)
- * or Cloudflare serverless pipeline (OpenGraph + Jina Reader -> MYBROWSER -> optional cloud browsers).
+ * or Cloudflare serverless pipeline (OpenGraph + Jina Reader -> raw CDP MYBROWSER -> optional cloud browsers).
  */
 export async function scrapeGoogleMapsLiveReview(
   reviewUrl: string,
@@ -1410,14 +1564,12 @@ export function isReviewerNameMatch(expectedName: string, actualName: string): b
     return true;
   }
 
-  // First name match (e.g. "Jayraj Thakur" vs "Jayraj")
   const expParts = expectedName.toLowerCase().split(/\s+/).filter(Boolean);
   const actParts = actualName.toLowerCase().split(/\s+/).filter(Boolean);
   if (expParts.length > 0 && actParts.length > 0) {
     if (expParts[0] === actParts[0] && expParts[0].length >= 2) return true;
   }
 
-  // Email prefix matching (e.g. "jayraj.0.thakur@gmail.com" vs "Jayraj Thakur")
   if (expectedName.includes("@")) {
     const emailPrefix = expectedName.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
     if (act.length >= 3 && (act.includes(emailPrefix) || emailPrefix.includes(act))) return true;
@@ -1429,7 +1581,6 @@ export function isReviewerNameMatch(expectedName: string, actualName: string): b
 
 /**
  * Extracts human-readable shop name from Google Maps URL if present.
- * e.g. /place/Aura+thai+family+spa/ -> "Aura thai family spa"
  */
 export function extractShopNameFromUrl(url: string): string | null {
   if (!url) return null;
@@ -1485,7 +1636,6 @@ export function isShopNameMatch(
 
 /**
  * Strictly verifies that review text on Google Maps matches the assigned AI review text.
- * Requires exact match, legitimate Google Maps prefix truncation, or >= 70% keyword overlap.
  */
 export function isReviewTextMatch(
   expectedText?: string,
@@ -1578,10 +1728,14 @@ export async function verifyGoogleReviewMatch(params: {
     resolvedReviewUrl.includes("#lrd=");
 
   if (!isActualReview) {
+    const isUnresolvedShortlink =
+      resolvedReviewUrl === proofLink.trim() &&
+      /(?:maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(resolvedReviewUrl);
     return {
       valid: false,
-      reason:
-        "The submitted link is not an individual review link. Please click 'Share' on your specific review, not the shop's main page.",
+      reason: isUnresolvedShortlink
+        ? "Could not expand your Google Maps shortlink due to a temporary network timeout. Please click Verify & Earn again."
+        : "The submitted link is not an individual review link. Please click 'Share' on your specific review, not the shop's main page.",
       resolvedReviewUrl,
     };
   }
