@@ -279,7 +279,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // A. Verify Reviewer Name Match (if DOM details were scraped)
+    // A. Verify Reviewer Name Match
+    let isAuthorVerified = false;
     if (liveScrape.reviewerName) {
       const nameMatches = isReviewerNameMatch(expectedReviewer, liveScrape.reviewerName);
       if (!nameMatches) {
@@ -290,14 +291,7 @@ export async function POST(req: Request) {
           { status: 400 }
         );
       }
-    } else if (!liveScrape.isStructuralOnly) {
-      return NextResponse.json(
-        {
-          error:
-            "Verification failed: Could not detect the reviewer name on the store listing. If you just posted your review, the listing may take 1-2 minutes to display it publicly. Please wait a moment and try again.",
-        },
-        { status: 400 }
-      );
+      isAuthorVerified = true;
     }
 
     // B. Verify Shop Name Match (Anti-Cheat: Review must be for the designated shop)
@@ -338,14 +332,6 @@ export async function POST(req: Request) {
           { status: 400 }
         );
       }
-    } else if (!liveScrape.isStructuralOnly) {
-      return NextResponse.json(
-        {
-          error:
-            "Verification failed: Could not detect your review text on the store listing. If you just posted it, the listing may take 1-2 minutes to display the text publicly. Please wait a moment and try again.",
-        },
-        { status: 400 }
-      );
     }
 
     // D. Verify Star Rating Match (Anti-Cheat: Review star rating must match assigned 3, 4, or 5 stars)
@@ -360,10 +346,6 @@ export async function POST(req: Request) {
       }
     }
 
-    const autoVerifiedDetails = liveScrape.isStructuralOnly
-      ? `Auto-Verified (CID Match): Reviewer="${expectedReviewer}", Shop="${targetTask.title}", Stars=${assignedStars || 5}★`
-      : `Auto-Verified: Reviewer="${liveScrape.reviewerName || expectedReviewer}", Shop="${liveScrape.shopName || targetTask.title}", Stars=${liveScrape.starRating || assignedStars || 5}★`;
-
     // 6. Fetch Settings for Verification Mode
     const { data: setting } = await supabase
       .from("Setting")
@@ -373,10 +355,23 @@ export async function POST(req: Request) {
 
     const isAutoMode = (setting?.verificationMode || "AUTO") === "AUTO";
     const rewardAmount = targetTask.rewardInr || 10;
-    const newCompletedCount = isAutoMode
+
+    // Strict Anti-Cheat Rule:
+    // Rewards can ONLY be auto-credited immediately if:
+    // 1) The admin has verificationMode set to "AUTO"
+    // 2) AND the reviewer author name was actually extracted and verified to match the logged-in account!
+    // If Google Maps rendered dynamically (client-side) and author identity could NOT be autonomously confirmed,
+    // the submission MUST NOT be blindly approved. It is queued as PENDING so the admin can verify the author account.
+    const isAutoApproved = isAutoMode && isAuthorVerified;
+
+    const newCompletedCount = isAutoApproved
       ? targetTask.completedCount + 1
       : targetTask.completedCount;
     const willClose = newCompletedCount >= targetTask.maxLimit;
+
+    const autoVerifiedDetails = isAuthorVerified
+      ? `Auto-Verified: Reviewer="${liveScrape.reviewerName}", Shop="${liveScrape.shopName || targetTask.title}", Stars=${liveScrape.starRating || assignedStars || 5}★`
+      : `Pending Reviewer Verification: Store match confirmed for '${liveScrape.shopName || targetTask.title}' (${liveScrape.starRating || assignedStars || 5}★). Review author name on Google Maps requires 1-click confirmation by Admin to ensure it was posted by '${expectedReviewer}'.`;
 
     const notes = `${autoVerifiedDetails}${
       assignedReviewText ? ` | Assigned: "${assignedReviewText}"` : ""
@@ -392,7 +387,7 @@ export async function POST(req: Request) {
         userId,
         taskId,
         proofLink: trimmedProofLink,
-        status: isAutoMode ? "APPROVED" : "PENDING",
+        status: isAutoApproved ? "APPROVED" : "PENDING",
         rewardCredited: rewardAmount,
         adminNotes: notes,
         createdAt: new Date().toISOString(),
@@ -408,8 +403,8 @@ export async function POST(req: Request) {
 
     let updatedWalletBalance: number | undefined = undefined;
 
-    // 8. Auto-credit & Update Task Count if Auto Mode
-    if (isAutoMode) {
+    // 8. Auto-credit & Update Task Count ONLY IF fully auto-approved
+    if (isAutoApproved) {
       // Update Task completedCount & status
       await supabase
         .from("Task")
@@ -445,14 +440,14 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         success: true,
-        message: isAutoMode
+        message: isAutoApproved
           ? `Task verified! ₹${rewardAmount} credited to your wallet.`
-          : "Task submitted for verification. Reward will be credited upon approval.",
+          : `Task submitted! Proof link recorded for ${targetTask.title}. To prevent multi-account review sharing, your submission is queued for review verification. ₹${rewardAmount} will be credited once confirmed.`,
         submission: insertedSub,
-        credited: isAutoMode,
+        credited: isAutoApproved,
         rewardAmount,
         newBalance: updatedWalletBalance,
-        taskClosed: willClose,
+        taskClosed: willClose && isAutoApproved,
       },
       { status: 201 }
     );
