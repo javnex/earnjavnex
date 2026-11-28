@@ -57,10 +57,36 @@ const nextConfig: NextConfig = {
     },
   },
   async headers() {
+    const noStoreHeaders = [
+      {
+        key: "Cache-Control",
+        value: "private, no-store, no-cache, must-revalidate",
+      },
+      {
+        key: "Pragma",
+        value: "no-cache",
+      },
+    ];
     return [
       {
         source: "/(.*)",
         headers: securityHeaders,
+      },
+      {
+        source: "/dashboard",
+        headers: noStoreHeaders,
+      },
+      {
+        source: "/dashboard/:path*",
+        headers: noStoreHeaders,
+      },
+      {
+        source: "/admin",
+        headers: noStoreHeaders,
+      },
+      {
+        source: "/admin/:path*",
+        headers: noStoreHeaders,
       },
     ];
   },

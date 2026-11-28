@@ -133,7 +133,10 @@ export default function Navbar() {
 
                 {/* Sign Out */}
                 <button
-                  onClick={() => signOut({ callbackUrl: "/auth/login" })}
+                  onClick={async () => {
+                    await signOut({ redirect: false });
+                    window.location.replace("/auth/login");
+                  }}
                   title="Sign out"
                   aria-label="Sign out of your account"
                   className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"

@@ -32,7 +32,7 @@ interface Transfer {
 }
 
 export default function TransferPage() {
-  const { data: session, update } = useSession();
+  const { data: session, status, update } = useSession();
   const currentUserId = (session?.user as any)?.id;
   const walletBalance = Number((session?.user as any)?.walletBalance ?? 0);
   const myUserCode = (session?.user as any)?.userCode ?? "";
@@ -143,21 +143,30 @@ export default function TransferPage() {
   const fetchHistory = async () => {
     try {
       setHistoryLoading(true);
-      const res = await fetch("/api/transfers");
+      const res = await fetch("/api/transfers", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setHistory(data.transfers || []);
+      } else {
+        setHistory([]);
       }
     } catch (err) {
       console.error("Failed to load transfers:", err);
+      setHistory([]);
     } finally {
       setHistoryLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchHistory();
-  }, []);
+    if (status === "authenticated") {
+      fetchHistory();
+    } else if (status === "unauthenticated") {
+      setHistory([]);
+      setRecipientPreview(null);
+      setHistoryLoading(false);
+    }
+  }, [status]);
 
   const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();

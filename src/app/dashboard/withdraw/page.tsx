@@ -33,7 +33,7 @@ interface Withdrawal {
 }
 
 export default function WithdrawPage() {
-  const { data: session, update } = useSession();
+  const { data: session, status, update } = useSession();
   const walletBalance = Number((session?.user as any)?.walletBalance ?? 0);
   const minThreshold = 100;
   const isUnlocked = walletBalance >= minThreshold;
@@ -90,21 +90,29 @@ export default function WithdrawPage() {
   const fetchWithdrawals = async () => {
     try {
       setHistoryLoading(true);
-      const res = await fetch("/api/withdrawals");
+      const res = await fetch("/api/withdrawals", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setHistory(data.withdrawals || []);
+      } else {
+        setHistory([]);
       }
     } catch (err) {
       console.error("Failed to load withdrawals:", err);
+      setHistory([]);
     } finally {
       setHistoryLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchWithdrawals();
-  }, []);
+    if (status === "authenticated") {
+      fetchWithdrawals();
+    } else if (status === "unauthenticated") {
+      setHistory([]);
+      setHistoryLoading(false);
+    }
+  }, [status]);
 
   // Calculated preview values
   const numericAmount = parseFloat(amountInr) || 0;

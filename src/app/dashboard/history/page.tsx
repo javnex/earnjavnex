@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 export default function HistoryPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const currentUserId = (session?.user as any)?.id;
 
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -27,28 +27,43 @@ export default function HistoryPage() {
   const [filter, setFilter] = useState<"ALL" | "TASKS" | "TRANSFERS" | "WITHDRAWALS">("ALL");
 
   useEffect(() => {
+    if (status === "unauthenticated") {
+      setSubmissions([]);
+      setTransfers([]);
+      setWithdrawals([]);
+      setLoading(false);
+      return;
+    }
+    if (status !== "authenticated") return;
+
     const loadAll = async () => {
       try {
         setLoading(true);
         const [subsRes, transRes, withsRes] = await Promise.all([
-          fetch("/api/submissions"),
-          fetch("/api/transfers"),
-          fetch("/api/withdrawals"),
+          fetch("/api/submissions", { cache: "no-store" }),
+          fetch("/api/transfers", { cache: "no-store" }),
+          fetch("/api/withdrawals", { cache: "no-store" }),
         ]);
 
         if (subsRes.ok) {
           const data = await subsRes.json();
           setSubmissions(data.submissions || []);
+        } else {
+          setSubmissions([]);
         }
 
         if (transRes.ok) {
           const data = await transRes.json();
           setTransfers(data.transfers || []);
+        } else {
+          setTransfers([]);
         }
 
         if (withsRes.ok) {
           const data = await withsRes.json();
           setWithdrawals(data.withdrawals || []);
+        } else {
+          setWithdrawals([]);
         }
       } catch (err) {
         console.error("Failed to load history:", err);
@@ -58,7 +73,11 @@ export default function HistoryPage() {
     };
 
     loadAll();
-  }, []);
+  }, [status]);
+
+  if (status === "unauthenticated" || (status !== "loading" && !session?.user)) {
+    return null;
+  }
 
   // Combine and sort events by date descending
   type EventItem = {

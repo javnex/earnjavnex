@@ -42,7 +42,7 @@ interface Submission {
 }
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [recentSubmissions, setRecentSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,19 +53,23 @@ export default function DashboardPage() {
     try {
       setLoading(true);
       const [tasksRes, subsRes, prefsRes] = await Promise.all([
-        fetch("/api/tasks"),
-        fetch("/api/submissions"),
-        fetch("/api/user/preferences"),
+        fetch("/api/tasks", { cache: "no-store" }),
+        fetch("/api/submissions", { cache: "no-store" }),
+        fetch("/api/user/preferences", { cache: "no-store" }),
       ]);
 
       if (tasksRes.ok) {
         const data = await tasksRes.json();
         setTasks(data.tasks || []);
+      } else {
+        setTasks([]);
       }
 
       if (subsRes.ok) {
         const data = await subsRes.json();
         setRecentSubmissions(data.submissions || []);
+      } else {
+        setRecentSubmissions([]);
       }
 
       if (prefsRes.ok) {
@@ -76,6 +80,8 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.error("Dashboard data load error:", err);
+      setTasks([]);
+      setRecentSubmissions([]);
     } finally {
       setLoading(false);
     }
@@ -103,8 +109,18 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    if (status === "authenticated") {
+      fetchDashboardData();
+    } else if (status === "unauthenticated") {
+      setTasks([]);
+      setRecentSubmissions([]);
+      setLoading(false);
+    }
+  }, [status]);
+
+  if (status === "unauthenticated" || (status !== "loading" && !session?.user)) {
+    return null;
+  }
 
   return (
     <div className="space-y-8">

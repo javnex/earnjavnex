@@ -28,6 +28,13 @@ const createTaskSchema = z.object({
 export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401, headers: { "Cache-Control": "private, no-store" } }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     const showAll = searchParams.get("all") === "true";
 

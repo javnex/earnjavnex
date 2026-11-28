@@ -69,7 +69,7 @@ interface VerificationModalState {
 }
 
 export default function TasksPage() {
-  const { data: session, update } = useSession();
+  const { data: session, status, update } = useSession();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [proofInputs, setProofInputs] = useState<Record<string, string>>({});
@@ -97,21 +97,29 @@ export default function TasksPage() {
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/tasks");
+      const res = await fetch("/api/tasks", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setTasks(data.tasks || []);
+      } else {
+        setTasks([]);
       }
     } catch (err) {
       console.error("Failed to load tasks:", err);
+      setTasks([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTasks();
-  }, []);
+    if (status === "authenticated") {
+      fetchTasks();
+    } else if (status === "unauthenticated") {
+      setTasks([]);
+      setLoading(false);
+    }
+  }, [status]);
 
   const handleInputChange = (taskId: string, val: string) => {
     setProofInputs((prev) => ({ ...prev, [taskId]: val }));
