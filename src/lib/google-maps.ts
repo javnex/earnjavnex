@@ -264,29 +264,28 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
       const jinaRes = await fetch(`https://r.jina.ai/${targetUrl}`, {
         signal: jinaController.signal,
         headers: {
-          Accept: "text/html",
-          "X-Return-Format": "html",
-          "X-Wait-For-Selector":
-            "span.wiI7pd, .d4r55, .daF0l, button.P9Vtnb, button.fontTitleSmall",
+          Accept: "text/plain",
         },
       });
       clearTimeout(jinaTimeout);
 
       if (jinaRes.ok) {
-        const fullHtml = await jinaRes.text();
+        const fullContent = await jinaRes.text();
 
         if (
-          fullHtml.includes("This review is no longer available") ||
-          fullHtml.includes("review is unavailable") ||
-          fullHtml.includes("Review not found")
+          fullContent.includes("This review is no longer available") ||
+          fullContent.includes("review is unavailable") ||
+          fullContent.includes("Review not found") ||
+          (fullContent.includes("Unavailable") && !fullContent.includes("★★"))
         ) {
           return {
             success: false,
-            error: "This review is no longer available or was deleted on Google Maps.",
+            error:
+              "Google Maps shows: 'This review is no longer available.' Google has suppressed or shadow-banned this review from public view (or it was deleted). Open the link in an Incognito tab to check: reviews must be publicly visible to earn rewards.",
           };
         }
 
-        const data = extractReviewDataFromHtml(fullHtml);
+        const data = extractReviewDataFromHtml(fullContent);
         if (data.reviewerName) extractedReviewerName = data.reviewerName;
         if (data.reviewText) extractedReviewText = data.reviewText;
         if (data.starRating) extractedStars = data.starRating;
@@ -318,11 +317,13 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
     if (
       stdout.includes("This review is no longer available") ||
       stdout.includes("review is unavailable") ||
-      stdout.includes("Review not found")
+      stdout.includes("Review not found") ||
+      stdout.includes("HlvSq")
     ) {
       return {
         success: false,
-        error: "This review is no longer available or was deleted on Google Maps.",
+        error:
+          "Google Maps shows: 'This review is no longer available.' Google has suppressed or shadow-banned this review from public view (or it was deleted). Open the link in an Incognito tab to check: reviews must be publicly visible to earn rewards.",
       };
     }
 
