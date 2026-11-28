@@ -1,4 +1,4 @@
-import { exec, execFile } from "child_process";
+import { exec, execFile, spawn } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import os from "os";
@@ -7,27 +7,51 @@ import path from "path";
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
+const CHROME_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36";
+
+const UNAVAILABLE_REVIEW_ERROR =
+  "Google Maps shows: 'This review is no longer available.' Google has suppressed or shadow-banned this review from public view (or it was deleted). Open the link in an Incognito tab to check: reviews must be publicly visible to earn rewards.";
+
+export interface LiveReviewScrapeResult {
+  success: boolean;
+  shopName?: string;
+  reviewerName?: string;
+  reviewText?: string;
+  starRating?: number;
+  reviewId?: string;
+  source?: string;
+  isStructuralOnly?: boolean;
+  isUnavailable?: boolean;
+  error?: string;
+}
+
 /**
- * Finds the Chrome or Chromium binary path on the host system.
+ * Finds the Chrome or Chromium binary path on local host environments.
+ * Always returns null on serverless edge runtimes (e.g. Cloudflare Workers).
  */
 export function findChromePath(): string | null {
-  if (process.env.CHROME_PATH && fs.existsSync(process.env.CHROME_PATH)) {
-    return process.env.CHROME_PATH;
-  }
-  const localAppData = process.env.LOCALAPPDATA || "";
-  const candidates = [
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    `${localAppData}\\Google\\Chrome\\Application\\chrome.exe`,
-    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
-    `${localAppData}\\Microsoft\\Edge\\Application\\msedge.exe`,
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-  ];
-  for (const c of candidates) {
-    if (c && fs.existsSync(/*turbopackIgnore: true*/ c)) return c;
+  try {
+    if (process.env.CHROME_PATH && fs.existsSync(process.env.CHROME_PATH)) {
+      return process.env.CHROME_PATH;
+    }
+    const localAppData = process.env.LOCALAPPDATA || "";
+    const candidates = [
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+      `${localAppData}\\Google\\Chrome\\Application\\chrome.exe`,
+      "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+      "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+      `${localAppData}\\Microsoft\\Edge\\Application\\msedge.exe`,
+      "/usr/bin/google-chrome",
+      "/usr/bin/chromium",
+      "/usr/bin/chromium-browser",
+    ];
+    for (const c of candidates) {
+      if (c && fs.existsSync(/*turbopackIgnore: true*/ c)) return c;
+    }
+  } catch {
+    // Non-Node serverless runtimes
   }
   return null;
 }
@@ -49,13 +73,16 @@ export function extractGoogleMapsCid(url: string): string | null {
 
 /**
  * Extracts the unique Google Review identifier from a resolved Google Maps review URL.
- * e.g. Ci9DQUlRQUNvZENodHljRjlvT21wWWFXZHVPWGRaWnpCWmNrbEJTbFV5UWtWTlptYxAB or rp_h:...
+ * Supports Chd..., ChZ..., Ci9..., 2@1:..., and rp_h:... review tokens.
  */
 export function extractGoogleReviewId(url: string): string | null {
   if (!url) return null;
 
-  const b64Match = url.match(/!1s(Ci9[a-zA-Z0-9_-]+)/);
-  if (b64Match) return b64Match[1];
+  const tokenMatch = url.match(/!1s(C[a-zA-Z0-9_-]{12,})/);
+  if (tokenMatch) return tokenMatch[1];
+
+  const legacyPairMatch = url.match(/!1s(2@1:[^!?&]+)/);
+  if (legacyPairMatch) return legacyPairMatch[1];
 
   const rpHexMatch = url.match(/rp_h:[a-zA-Z0-9_-]+/);
   if (rpHexMatch) return rpHexMatch[0];
@@ -64,9 +91,22 @@ export function extractGoogleReviewId(url: string): string | null {
 }
 
 /**
+ * Removes tracking parameters (such as g_st) without corrupting remaining query parameters.
+ */
+function stripTrackingParams(url: string): string {
+  const trimmed = url.trim();
+  try {
+    const parsed = new URL(trimmed);
+    parsed.searchParams.delete("g_st");
+    return parsed.toString();
+  } catch {
+    return trimmed.replace(/[?&]g_st=[^&]+/g, "");
+  }
+}
+
+/**
  * Follows shortlink redirects (e.g. https://share.google/... or https://maps.app.goo.gl/...)
  * using native Web fetch() to get the final Google destination URL.
- * Fully compatible with Cloudflare Workers (no Node child_process or curl.exe required).
  */
 export async function resolveGoogleMapsUrl(url: string): Promise<string> {
   const trimmed = url.trim();
@@ -80,8 +120,7 @@ export async function resolveGoogleMapsUrl(url: string): Promise<string> {
       method: "GET",
       redirect: "follow",
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        "User-Agent": CHROME_USER_AGENT,
         Accept:
           "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
       },
@@ -94,7 +133,7 @@ export async function resolveGoogleMapsUrl(url: string): Promise<string> {
     console.warn("fetch redirect resolution warning:", err);
   }
 
-  // Fallback for Node environments if curl exists
+  // Fallback for local Node environments if curl.exe exists
   try {
     if (typeof execAsync === "function") {
       const { stdout } = await execAsync(`curl.exe -s -I "${trimmed}"`, {
@@ -106,7 +145,7 @@ export async function resolveGoogleMapsUrl(url: string): Promise<string> {
       }
     }
   } catch {
-    // fallback
+    // ignore on non-Windows/serverless
   }
 
   return trimmed;
@@ -129,7 +168,172 @@ export function decodeHtmlEntities(str?: string): string | undefined {
 }
 
 /**
- * Helper to extract reviewer name, text, stars, and shop name from Google Maps HTML.
+ * Checks whether rendered Google Maps content indicates a suppressed/deleted review.
+ */
+export function isReviewUnavailableContent(content: string): boolean {
+  if (!content) return false;
+  const lower = content.toLowerCase();
+  if (lower.includes("this review is no longer available") || lower.includes("review is unavailable")) {
+    return true;
+  }
+  if (
+    lower.includes("review not found") &&
+    !content.includes("data-review-id") &&
+    !content.includes("Photo of") &&
+    !content.includes("P9Vtnb")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+const INVALID_AUTHOR_LINES = new Set([
+  "place details",
+  "loading",
+  "sign in",
+  "unavailable",
+  "collapse side panel",
+  "collapse side",
+  "like",
+  "share",
+  "follow",
+  "following",
+  "get app",
+  "recents",
+  "saved",
+  "back",
+  "search",
+  "close",
+  "menu",
+  "...",
+]);
+
+function isUiChromeOrIconLine(line: string): boolean {
+  if (!line) return true;
+  // Material Symbols Private Use Area glyphs & whitespace only
+  if (/^[\u{e000}-\u{f8ff}\s]+$/u.test(line)) return true;
+  if (INVALID_AUTHOR_LINES.has(line.toLowerCase())) return true;
+  if (/^local guide\b/i.test(line)) return true;
+  if (/^\d+\s+reviews?\b/i.test(line)) return true;
+  if (/^this review is no longer available/i.test(line)) return true;
+  if (/^map data/i.test(line)) return true;
+  return false;
+}
+
+const TIME_AGO_LINE_RE =
+  /^(?:edited\s+)?(?:(?:\d+|a|an|one)\s+(?:second|minute|hour|day|week|month|year)s?\s+ago|just now)(?:\s+on\s+.*)?$/i;
+
+const TEXT_STOP_LINE_RE =
+  /^(?:|like||share|response from the owner\b|collapse side|sign in|unavailable|map data\b|service\s*:|rooms\s*:|location\s*:|food\s*:|atmosphere\s*:|highlights\s*:)/i;
+
+/**
+ * Parses rendered Google Maps text/markdown (e.g. from Jina Reader with X-Return-Format: text).
+ * Note: intentionally avoids inferring star rating from Material Symbol star icons because
+ * Google Maps renders 5 glyphs in all cases and encodes score purely via CSS colors/classes.
+ */
+export function extractReviewDataFromText(text: string): {
+  reviewerName?: string;
+  reviewText?: string;
+  shopName?: string;
+} {
+  let reviewerName: string | undefined;
+  let reviewText: string | undefined;
+  let shopName: string | undefined;
+
+  const mdPhotoMatch = text.match(/!\[(?:Image\s*\d*:\s*)?Photo of ([^\]]+)\]/i);
+  if (mdPhotoMatch?.[1]) {
+    reviewerName = mdPhotoMatch[1].trim();
+  }
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\u00a0/g, " ").trim());
+
+  const placeDetailsIdx = lines.findIndex((l) => /^place details$/i.test(l));
+
+  // Extract Shop Name and Reviewer Name around the "PLACE DETAILS" landmark
+  if (placeDetailsIdx > 0) {
+    // Nav rail ends at Get app / Recents / Saved / Search Google Maps
+    let headerEndIdx = -1;
+    for (let i = Math.max(0, placeDetailsIdx - 12); i < placeDetailsIdx; i++) {
+      const lower = lines[i].toLowerCase();
+      if (
+        lower === "get app" ||
+        lower === "recents" ||
+        lower === "saved" ||
+        lower.endsWith("get app") ||
+        lower === "search google maps" ||
+        lower === "close"
+      ) {
+        headerEndIdx = i;
+      }
+    }
+
+    for (let i = headerEndIdx + 1; i < placeDetailsIdx; i++) {
+      const candidate = lines[i];
+      if (!candidate || /^!\[/.test(candidate) || isUiChromeOrIconLine(candidate)) continue;
+      if (candidate.startsWith("* ")) continue;
+      shopName = candidate;
+      break;
+    }
+
+    // Author name appears right after PLACE DETAILS (skipping blanks/icons/avatar images)
+    if (!reviewerName) {
+      for (let i = placeDetailsIdx + 1; i < Math.min(lines.length, placeDetailsIdx + 10); i++) {
+        const candidate = lines[i].replace(/^[\u{e000}-\u{f8ff}\s]+/u, "").trim();
+        if (!candidate || /^!\[/.test(candidate)) continue;
+        if (isUiChromeOrIconLine(candidate)) continue;
+        if (TIME_AGO_LINE_RE.test(candidate)) break;
+        // Confirm review context follows nearby (menu glyph , stars , or relative time)
+        const windowSlice = lines.slice(i + 1, Math.min(lines.length, i + 12)).join("\n");
+        if (
+          windowSlice.includes("") ||
+          windowSlice.includes("") ||
+          /ago/i.test(windowSlice) ||
+          /Local Guide/i.test(windowSlice)
+        ) {
+          reviewerName = candidate;
+        }
+        break;
+      }
+    }
+  }
+
+  // Extract review body starting right after the timestamp line (e.g. "Edited 2 hours ago")
+  const timeIdx = lines.findIndex((l) => {
+    const stripped = l.replace(/^[\u{e000}-\u{f8ff}\s]+/u, "").trim();
+    return TIME_AGO_LINE_RE.test(stripped);
+  });
+
+  if (timeIdx >= 0) {
+    const bodyLines: string[] = [];
+    for (let i = timeIdx + 1; i < Math.min(lines.length, timeIdx + 30); i++) {
+      const line = lines[i];
+      if (!line) {
+        if (bodyLines.length > 0) continue;
+        continue;
+      }
+      if (TEXT_STOP_LINE_RE.test(line)) break;
+      if (/^[\u{e000}-\u{f8ff}\s]+$/u.test(line)) continue;
+      if (/^!\[/.test(line)) continue;
+      if (/^New$/i.test(line) && bodyLines.length === 0) continue;
+      bodyLines.push(line);
+    }
+    const joined = bodyLines.join(" ").trim();
+    if (joined.length >= 2) {
+      reviewText = joined;
+    }
+  }
+
+  return {
+    reviewerName: decodeHtmlEntities(reviewerName),
+    reviewText: decodeHtmlEntities(reviewText),
+    shopName: decodeHtmlEntities(shopName),
+  };
+}
+
+/**
+ * Extracts reviewer name, text, stars, and shop name from Google Maps HTML or rendered text/markdown.
  */
 export function extractReviewDataFromHtml(html: string): {
   reviewerName?: string;
@@ -142,91 +346,81 @@ export function extractReviewDataFromHtml(html: string): {
   let starRating: number | undefined = undefined;
   let shopName: string | undefined = undefined;
 
-  // 1. Reviewer Author Name
+  // 1. Reviewer Author Name (HTML DOM matchers)
   const ariaActionMatch = html.match(/aria-label="Actions for ([^"']+)'s review"/i);
-  if (ariaActionMatch && ariaActionMatch[1]) {
+  if (ariaActionMatch?.[1]) {
     reviewerName = ariaActionMatch[1].trim();
   }
   if (!reviewerName) {
     const btnMatch = html.match(
       /<button class="[^"]*(?:P9Vtnb|fontTitleSmall)[^"]*"[^>]*>([^<]+)<\/button>/
     );
-    if (btnMatch && btnMatch[1]) {
+    if (btnMatch?.[1]) {
       reviewerName = btnMatch[1].trim();
     }
   }
   if (!reviewerName) {
     const biiQbMatch = html.match(/<div class="biiQb">[\s\S]*?<button[^>]*>([^<]+)<\/button>/);
-    if (biiQbMatch && biiQbMatch[1] && !biiQbMatch[1].includes("...")) {
+    if (biiQbMatch?.[1] && !biiQbMatch[1].includes("...")) {
       reviewerName = biiQbMatch[1].trim();
     }
   }
   if (!reviewerName) {
     const altMatch = html.match(/alt="Photo of ([^"]+)"/i);
-    if (altMatch && altMatch[1]) {
+    if (altMatch?.[1]) {
       reviewerName = altMatch[1].trim();
     }
   }
   if (!reviewerName) {
     const ariaPhotoMatch = html.match(/aria-label="Photo of ([^"]+)"/i);
-    if (ariaPhotoMatch && ariaPhotoMatch[1]) {
+    if (ariaPhotoMatch?.[1]) {
       reviewerName = ariaPhotoMatch[1].trim();
     }
   }
-  if (!reviewerName) {
-    const photoMatch = html.match(/Photo of ([^\n\]\)\"]+)/i);
-    if (photoMatch && photoMatch[1]) {
-      reviewerName = photoMatch[1].trim();
-    }
-  }
-  if (!reviewerName) {
-    const mdPhotoMatch = html.match(/!\[(?:Image\s*\d*:\s*)?Photo of ([^\]]+)\]/i);
-    if (mdPhotoMatch && mdPhotoMatch[1]) {
-      reviewerName = mdPhotoMatch[1].trim();
+
+  // 2. Review Text (HTML DOM matchers - supports inline <br> tags cleanly)
+  const rawHtmlTextMatch =
+    html.match(/<span class="wiI7pd">([\s\S]*?)<\/span>/) ||
+    html.match(/class="MyEned"[^>]*><span[^>]*>([\s\S]*?)<\/span>/);
+  if (rawHtmlTextMatch?.[1]) {
+    const stripped = rawHtmlTextMatch[1]
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (stripped) {
+      reviewText = decodeHtmlEntities(stripped);
     }
   }
 
-  // 2. Review Text
-  const textMatch =
-    html.match(/<span class="wiI7pd">([^<]+)<\/span>/) ||
-    html.match(/class="MyEned"[^>]*><span[^>]*>([^<]+)<\/span>/);
-  if (textMatch && textMatch[1]) {
-    reviewText = decodeHtmlEntities(textMatch[1].trim());
-  }
-  if (!reviewText) {
-    // Markdown format fallback (e.g. from Jina markdown output)
-    const mdBodyMatch = html.match(
-      /(?:minutes?|hours?|days?|weeks?|months?|years?)\s*ago\s*\n+([\s\S]*?)(?:\n\s*(?:|Like|Share|Collapse|Response|\*\*Rooms|\*\*Service|\*\*Location|$))/i
-    );
-    if (mdBodyMatch && mdBodyMatch[1] && mdBodyMatch[1].trim().length >= 5) {
-      reviewText = decodeHtmlEntities(mdBodyMatch[1].trim());
-    }
-  }
-
-  // 3. Star Rating
+  // 3. Star Rating (HTML DOM aria-label matchers)
   const starMatch =
     html.match(/<span class="kvMYJc"[^>]*aria-label="([1-5])\s*stars?"/i) ||
     html.match(/role="img"[^>]*aria-label="([1-5])\s*stars?"/i) ||
     html.match(/aria-label="(?:Rated\s*)?([1-5])\s*(?:stars?|\/5)/i) ||
     html.match(/aria-label="([1-5])\s*stars?"/i);
-  if (starMatch && starMatch[1]) {
+  if (starMatch?.[1]) {
     starRating = parseInt(starMatch[1], 10);
   }
 
-  // 4. Shop Name
+  // 4. Shop Name (HTML DOM matchers)
   const shopMatch =
     html.match(/<div class="daF0l">([^<]+)<\/div>/) ||
     html.match(/<h1 class="[^"]*DUwDvf[^"]*"[^>]*>([^<]+)<\/h1>/);
-  if (shopMatch && shopMatch[1]) {
+  if (shopMatch?.[1]) {
     shopName = decodeHtmlEntities(shopMatch[1].trim());
   }
-  if (!shopName) {
-    // Markdown lines fallback
-    const lines = html.split("\n").map((l) => l.trim()).filter(Boolean);
-    const placeIdx = lines.findIndex((l) => l.toLowerCase() === "place details");
-    if (placeIdx > 0) {
-      shopName = lines[placeIdx - 3] || lines[placeIdx - 2];
-    }
+
+  // 5. Fallback to rendered text/markdown parser when HTML selectors are absent (e.g. Jina Reader output)
+  if (!reviewerName || !reviewText || !shopName) {
+    const textParsed = extractReviewDataFromText(html);
+    if (!reviewerName && textParsed.reviewerName) reviewerName = textParsed.reviewerName;
+    if (!reviewText && textParsed.reviewText) reviewText = textParsed.reviewText;
+    if (!shopName && textParsed.shopName) shopName = textParsed.shopName;
+  }
+
+  if (reviewerName && isUiChromeOrIconLine(reviewerName)) {
+    reviewerName = undefined;
   }
 
   return {
@@ -238,244 +432,638 @@ export function extractReviewDataFromHtml(html: string): {
 }
 
 /**
- * Scrapes live Google Maps review DOM using headless Chromium when available,
- * or performs cloud headless DOM inspection on serverless runtimes (Cloudflare Workers).
+ * Local Node headless Chrome scraper using CDP event polling (stops immediately once author or unavailability renders).
+ * Falls back to --dump-dom if CDP socket startup fails.
  */
-export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
-  success: boolean;
-  shopName?: string;
-  reviewerName?: string;
-  reviewText?: string;
-  starRating?: number;
-  reviewId?: string;
-  isStructuralOnly?: boolean;
-  isUnavailable?: boolean;
-  error?: string;
-}> {
-  // First resolve any shortlink (e.g. share.google / maps.app.goo.gl)
-  const targetUrl = await resolveGoogleMapsUrl(reviewUrl);
-  const reviewId = extractGoogleReviewId(targetUrl);
+async function scrapeWithLocalChrome(
+  chromePath: string,
+  targetUrl: string,
+  fallbackReviewId: string | null
+): Promise<LiveReviewScrapeResult | null> {
+  const tmpProfile = path.join(
+    os.tmpdir(),
+    `ch-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+  );
+  fs.mkdirSync(tmpProfile, { recursive: true });
 
-  const chromePath = findChromePath();
-  if (chromePath) {
-    const tmpProfile = path.join(
-      os.tmpdir(),
-      `ch-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
-    );
-    try {
-      const { stdout } = await execFileAsync(
-        chromePath,
-        [
-          "--headless=new",
-          "--disable-gpu",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${tmpProfile}`,
-          "--virtual-time-budget=7000",
-          "--dump-dom",
-          targetUrl,
-        ],
-        {
-          maxBuffer: 25 * 1024 * 1024,
-          timeout: 16000,
-        }
-      );
-      console.log("[DEBUG] chrome stdout length:", stdout.length);
+  const proc = spawn(
+    chromePath,
+    [
+      "--headless=new",
+      "--disable-gpu",
+      "--remote-debugging-port=0",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--lang=en-US",
+      `--user-data-dir=${tmpProfile}`,
+      "about:blank",
+    ],
+    { stdio: "ignore" }
+  );
 
-      if (
-        stdout.includes("This review is no longer available") ||
-        stdout.includes("review is unavailable") ||
-        (stdout.includes("Review not found") && !stdout.includes("aria-label"))
-      ) {
-        const parsed = extractReviewDataFromHtml(stdout);
-        return {
-          success: false,
-          isUnavailable: true,
-          shopName: parsed.shopName,
-          error:
-            "Google Maps shows: 'This review is no longer available.' Google has suppressed or shadow-banned this review from public view (or it was deleted). Open the link in an Incognito tab to check: reviews must be publicly visible to earn rewards.",
-        };
-      }
-
-      const parsed = extractReviewDataFromHtml(stdout);
-      const reviewIdMatch = stdout.match(/data-review-id="([^"]+)"/);
-      const extractedId = reviewIdMatch ? reviewIdMatch[1] : reviewId;
-
-      return {
-        success: Boolean(parsed.reviewerName || parsed.shopName || parsed.reviewText || parsed.starRating),
-        shopName: parsed.shopName,
-        reviewerName: parsed.reviewerName,
-        reviewText: parsed.reviewText,
-        starRating: parsed.starRating,
-        reviewId: extractedId || undefined,
-      };
-    } catch (err: any) {
-      console.warn("Headless chrome dump error:", err);
-    }
-  }
-
-  // Cloud / Serverless Headless Inspection (Cloudflare Workers & Vercel)
-  let extractedShopName: string | undefined = undefined;
-  let extractedStars: number | undefined = undefined;
-  let extractedReviewerName: string | undefined = undefined;
-  let extractedReviewText: string | undefined = undefined;
-
-  // Cloudflare Workers with Browser Rendering (@cloudflare/puppeteer)
-  if (!chromePath) {
-    try {
-      const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-      const cf = getCloudflareContext();
-      if (cf?.env && (cf.env as any).MYBROWSER) {
-        const puppeteer = (await import("@cloudflare/puppeteer")).default;
-        const browser = await puppeteer.launch((cf.env as any).MYBROWSER);
-        const page = await browser.newPage();
-        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 10000 });
-        const html = await page.content();
-        await browser.close();
-
-        if (
-          html.includes("This review is no longer available") ||
-          html.includes("review is unavailable") ||
-          (html.includes("Review not found") && !html.includes("data-review-id") && !html.includes("Photo of"))
-        ) {
-          return {
-            success: false,
-            isUnavailable: true,
-            error:
-              "Google Maps shows: 'This review is no longer available.' Google has suppressed or shadow-banned this review from public view (or it was deleted). Open the link in an Incognito tab to check: reviews must be publicly visible to earn rewards.",
-          };
-        }
-
-        const parsed = extractReviewDataFromHtml(html);
-        if (parsed.reviewerName) {
-          return {
-            success: true,
-            shopName: parsed.shopName,
-            reviewerName: parsed.reviewerName,
-            reviewText: parsed.reviewText,
-            starRating: parsed.starRating,
-            reviewId: reviewId || undefined,
-          };
+  let ws: WebSocket | null = null;
+  try {
+    // Wait for DevToolsActivePort to get assigned ephemeral port
+    let port: string | null = null;
+    const portFile = path.join(tmpProfile, "DevToolsActivePort");
+    for (let i = 0; i < 25; i++) {
+      if (fs.existsSync(portFile)) {
+        const raw = fs.readFileSync(portFile, "utf8").trim();
+        const firstLine = raw.split(/\r?\n/)[0]?.trim();
+        if (firstLine && /^\d+$/.test(firstLine)) {
+          port = firstLine;
+          break;
         }
       }
-    } catch (cfPuppeteerErr) {
-      console.warn("Cloudflare puppeteer execution warning:", cfPuppeteerErr);
+      await new Promise((r) => setTimeout(r, 150));
     }
-  }
 
-  // 1. Cloud Headless Reader (Jina Reader via shortlink)
-  // Fetching via the original shortlink (reviewUrl) allows Jina to bypass Google Maps botguard blocks.
-  const cleanReviewUrl = reviewUrl.trim().replace(/[?&]g_st=[^&]+/g, "");
-  const readerCandidates = [cleanReviewUrl, targetUrl];
-
-  for (const candidateUrl of readerCandidates) {
-    if (extractedReviewerName) break;
-    try {
-      const jinaController = new AbortController();
-      const jinaTimeout = setTimeout(() => jinaController.abort(), 12000);
-
-      const jinaRes = await fetch(`https://r.jina.ai/${candidateUrl}`, {
-        signal: jinaController.signal,
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-          "X-Return-Format": "html",
-        },
-      });
-      clearTimeout(jinaTimeout);
-
-      if (jinaRes.ok) {
-        const fullContent = await jinaRes.text();
-        if (
-          fullContent.includes("This review is no longer available") ||
-          fullContent.includes("review is unavailable") ||
-          (fullContent.includes("Review not found") &&
-            !fullContent.includes("Photo of") &&
-            !fullContent.includes("data-review-id"))
-        ) {
-          return {
-            success: false,
-            isUnavailable: true,
-            shopName: extractedShopName,
-            error:
-              "Google Maps shows: 'This review is no longer available.' Google has suppressed or shadow-banned this review from public view (or it was deleted). Open the link in an Incognito tab to check: reviews must be publicly visible to earn rewards.",
-          };
-        }
-
-        const data = extractReviewDataFromHtml(fullContent);
-        if (data.reviewerName) extractedReviewerName = data.reviewerName;
-        if (data.reviewText) extractedReviewText = data.reviewText;
-        if (data.starRating) extractedStars = data.starRating;
-        if (data.shopName && !extractedShopName) extractedShopName = data.shopName;
+    if (port && typeof WebSocket !== "undefined") {
+      let pageWsUrl = "";
+      for (let i = 0; i < 15; i++) {
+        try {
+          const listRes = await fetch(`http://127.0.0.1:${port}/json/list`);
+          const targets: any[] = await listRes.json();
+          const pageTarget = targets.find((t) => t.type === "page" && t.webSocketDebuggerUrl) || targets[0];
+          if (pageTarget?.webSocketDebuggerUrl) {
+            pageWsUrl = pageTarget.webSocketDebuggerUrl;
+            break;
+          }
+        } catch {}
+        await new Promise((r) => setTimeout(r, 150));
       }
-    } catch (jinaErr) {
-      console.warn("Jina HTML reader fetch error:", jinaErr);
-    }
 
-    // Markdown fallback if HTML format did not yield reviewerName
-    if (!extractedReviewerName) {
-      try {
-        const jinaMdRes = await fetch(`https://r.jina.ai/${candidateUrl}`, {
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-          },
+      if (pageWsUrl) {
+        ws = new WebSocket(pageWsUrl);
+        let msgId = 1;
+        const pending = new Map<number, (v: any) => void>();
+        const send = (method: string, params: any = {}) =>
+          new Promise<any>((resolve, reject) => {
+            if (!ws) return reject(new Error("WebSocket closed"));
+            const id = msgId++;
+            const timer = setTimeout(() => {
+              pending.delete(id);
+              resolve(null);
+            }, 5000);
+            pending.set(id, (val) => {
+              clearTimeout(timer);
+              resolve(val);
+            });
+            ws.send(JSON.stringify({ id, method, params }));
+          });
+
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error("CDP connect timeout")), 4000);
+          ws!.addEventListener("open", () => {
+            clearTimeout(timer);
+            resolve();
+          });
+          ws!.addEventListener("error", () => {
+            clearTimeout(timer);
+            reject(new Error("CDP socket error"));
+          });
         });
-        if (jinaMdRes.ok) {
-          const mdContent = await jinaMdRes.text();
-          const mdData = extractReviewDataFromHtml(mdContent);
-          if (mdData.reviewerName) extractedReviewerName = mdData.reviewerName;
-          if (mdData.reviewText && !extractedReviewText) extractedReviewText = mdData.reviewText;
-          if (mdData.starRating && !extractedStars) extractedStars = mdData.starRating;
-          if (mdData.shopName && !extractedShopName) extractedShopName = mdData.shopName;
+
+        ws.addEventListener("message", (ev) => {
+          try {
+            const msg = JSON.parse(String(ev.data));
+            if (msg.id && pending.has(msg.id)) {
+              pending.get(msg.id)!(msg.result);
+              pending.delete(msg.id);
+            }
+          } catch {}
+        });
+
+        await send("Page.enable");
+        await send("Page.navigate", { url: targetUrl });
+
+        let snap: {
+          author?: string | null;
+          star?: string | null;
+          review?: string | null;
+          shop?: string | null;
+          reviewId?: string | null;
+          unavail?: boolean;
+        } | null = null;
+
+        for (let i = 0; i < 32; i++) {
+          await new Promise((r) => setTimeout(r, 400));
+          const ev = await send("Runtime.evaluate", {
+            expression: `(() => {
+              const bodyText = document.body ? document.body.innerText : '';
+              const unavail = bodyText.includes('This review is no longer available') || bodyText.includes('review is unavailable');
+              const btn = document.querySelector('button.P9Vtnb, button.fontTitleSmall');
+              const actionEl = document.querySelector('[aria-label*="Actions for"]');
+              const photoEl = document.querySelector('img[alt*="Photo of"]');
+              let author = btn ? btn.textContent.trim() : null;
+              if (!author && actionEl) {
+                const m = (actionEl.getAttribute('aria-label') || '').match(/Actions for ([^"']+)'s review/i);
+                if (m) author = m[1].trim();
+              }
+              if (!author && photoEl) {
+                const m = (photoEl.getAttribute('alt') || '').match(/Photo of (.+)/i);
+                if (m) author = m[1].trim();
+              }
+              const starEl = document.querySelector('.kvMYJc, [role="img"][aria-label*="star"]');
+              const star = starEl ? starEl.getAttribute('aria-label') : null;
+              const revEl = document.querySelector('.wiI7pd, .MyEned span');
+              const review = revEl ? revEl.textContent.trim() : null;
+              const shopEl = document.querySelector('.daF0l, h1.DUwDvf');
+              const shop = shopEl ? shopEl.textContent.trim() : null;
+              const idEl = document.querySelector('[data-review-id]');
+              const reviewId = idEl ? idEl.getAttribute('data-review-id') : null;
+              return { author, star, review, shop, reviewId, unavail };
+            })()`,
+            returnByValue: true,
+          });
+          const val = ev?.result?.value;
+          if (val && (val.author || val.unavail)) {
+            if (!val.unavail && (!val.star || !val.review)) {
+              await new Promise((r) => setTimeout(r, 350));
+              const ev2 = await send("Runtime.evaluate", {
+                expression: `({
+                  author: document.querySelector('button.P9Vtnb, button.fontTitleSmall')?.textContent?.trim() || null,
+                  star: document.querySelector('.kvMYJc, [role="img"][aria-label*="star"]')?.getAttribute('aria-label') || null,
+                  review: document.querySelector('.wiI7pd, .MyEned span')?.textContent?.trim() || null,
+                  shop: document.querySelector('.daF0l, h1.DUwDvf')?.textContent?.trim() || null,
+                  reviewId: document.querySelector('[data-review-id]')?.getAttribute('data-review-id') || null,
+                  unavail: false
+                })`,
+                returnByValue: true,
+              });
+              snap = ev2?.result?.value || val;
+            } else {
+              snap = val;
+            }
+            break;
+          }
         }
-      } catch {}
+
+        if (snap) {
+          if (snap.unavail) {
+            return {
+              success: false,
+              isUnavailable: true,
+              shopName: snap.shop || undefined,
+              source: "local-chrome-cdp",
+              error: UNAVAILABLE_REVIEW_ERROR,
+            };
+          }
+          const starMatch = snap.star?.match(/([1-5])/);
+          const starRating = starMatch ? parseInt(starMatch[1], 10) : undefined;
+          return {
+            success: Boolean(snap.author || snap.shop || snap.review || starRating),
+            shopName: decodeHtmlEntities(snap.shop || undefined),
+            reviewerName: decodeHtmlEntities(snap.author || undefined),
+            reviewText: decodeHtmlEntities(snap.review || undefined),
+            starRating,
+            reviewId: snap.reviewId || fallbackReviewId || undefined,
+            source: "local-chrome-cdp",
+          };
+        }
+      }
     }
-  }
-
-  // 2. OpenGraph metadata fallback (for shopName and star rating)
-  if (!extractedShopName || !extractedStars) {
+  } catch (cdpErr) {
+    console.warn("Local Chrome CDP warning:", cdpErr);
+  } finally {
     try {
-      const ogRes = await fetch(targetUrl, {
-        headers: {
-          "User-Agent":
-            "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
-          "Accept-Language": "en-US,en;q=0.9",
-        },
-        redirect: "follow",
-      });
-      const ogHtml = await ogRes.text();
-
-      const ogTitleMatch =
-        ogHtml.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
-        ogHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
-
-      const ogDescMatch =
-        ogHtml.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
-        ogHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
-
-      if (ogTitleMatch && ogTitleMatch[1] && !extractedShopName) {
-        extractedShopName = decodeHtmlEntities(
-          ogTitleMatch[1].replace(/^Google review of\s*/i, "").trim()
-        );
-      }
-
-      if (ogDescMatch && ogDescMatch[1] && !extractedStars) {
-        const starCount = (ogDescMatch[1].match(/★/g) || []).length;
-        if (starCount >= 1 && starCount <= 5) {
-          extractedStars = starCount;
-        }
-      }
+      ws?.close();
+    } catch {}
+    try {
+      proc.kill();
+    } catch {}
+    try {
+      fs.rmSync(tmpProfile, { recursive: true, force: true });
     } catch {}
   }
 
+  // Secondary local fallback: --dump-dom with generous virtual time budget
+  const dumpProfile = `${tmpProfile}-dump`;
+  try {
+    const { stdout } = await execFileAsync(
+      chromePath,
+      [
+        "--headless=new",
+        "--disable-gpu",
+        "--no-first-run",
+        "--no-default-browser-check",
+        `--user-data-dir=${dumpProfile}`,
+        "--virtual-time-budget=12000",
+        "--dump-dom",
+        targetUrl,
+      ],
+      {
+        maxBuffer: 25 * 1024 * 1024,
+        timeout: 20000,
+      }
+    );
+
+    if (isReviewUnavailableContent(stdout)) {
+      const parsed = extractReviewDataFromHtml(stdout);
+      return {
+        success: false,
+        isUnavailable: true,
+        shopName: parsed.shopName,
+        source: "local-chrome-dump",
+        error: UNAVAILABLE_REVIEW_ERROR,
+      };
+    }
+
+    const parsed = extractReviewDataFromHtml(stdout);
+    const reviewIdMatch = stdout.match(/data-review-id="([^"]+)"/);
+    return {
+      success: Boolean(parsed.reviewerName || parsed.shopName || parsed.reviewText || parsed.starRating),
+      shopName: parsed.shopName,
+      reviewerName: parsed.reviewerName,
+      reviewText: parsed.reviewText,
+      starRating: parsed.starRating,
+      reviewId: (reviewIdMatch ? reviewIdMatch[1] : fallbackReviewId) || undefined,
+      source: "local-chrome-dump",
+    };
+  } catch (dumpErr) {
+    console.warn("Local Chrome dump warning:", dumpErr);
+    return null;
+  } finally {
+    try {
+      fs.rmSync(dumpProfile, { recursive: true, force: true });
+    } catch {}
+  }
+}
+
+/**
+ * Cloudflare Workers Browser Rendering (@cloudflare/puppeteer via MYBROWSER binding).
+ * Waits explicitly for Maps review JS hydration (not domcontentloaded) and guarantees browser.close().
+ */
+async function scrapeWithCloudflareBrowser(
+  targetUrl: string,
+  fallbackReviewId: string | null
+): Promise<LiveReviewScrapeResult | null> {
+  let cf: any = null;
+  try {
+    const cfSymbol = Symbol.for("__cloudflare-context__");
+    cf = (globalThis as any)[cfSymbol];
+    if (!cf?.env) {
+      const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+      cf = await getCloudflareContext({ async: true }).catch(() => getCloudflareContext());
+    }
+  } catch {
+    return null;
+  }
+
+  const browserBinding = cf?.env?.MYBROWSER;
+  if (!browserBinding) return null;
+
+  let browser: any = null;
+  try {
+    const puppeteer = (await import("@cloudflare/puppeteer")).default;
+    browser = await puppeteer.launch(browserBinding);
+    const page = await browser.newPage();
+
+    await page.setUserAgent(CHROME_USER_AGENT);
+    await page.setExtraHTTPHeaders({ "Accept-Language": "en-US,en;q=0.9" });
+    await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 11000 });
+
+    // Handle Google EU cookie consent gate if Worker executes from an EU edge POP
+    const currentUrl = page.url();
+    if (currentUrl.includes("consent.google.com")) {
+      try {
+        await page.evaluate(() => {
+          const btn = document.querySelector<HTMLButtonElement>(
+            'button[aria-label*="Reject all"], button[aria-label*="Accept all"], form button[type="submit"]'
+          );
+          btn?.click();
+        });
+        await page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 6000 }).catch(() => {});
+      } catch {}
+    }
+
+    // Wait for Google Maps review card or unavailability notice to hydrate via client JS
+    await page
+      .waitForFunction(
+        () => {
+          const bodyText = document.body ? document.body.innerText : "";
+          if (
+            bodyText.includes("This review is no longer available") ||
+            bodyText.includes("review is unavailable")
+          ) {
+            return true;
+          }
+          const authorBtn = document.querySelector("button.P9Vtnb, button.fontTitleSmall");
+          if (authorBtn?.textContent?.trim()) return true;
+          const actionEl = document.querySelector('[aria-label*="Actions for"]');
+          if (actionEl) return true;
+          const photoEl = document.querySelector('img[alt*="Photo of"]');
+          if (photoEl) return true;
+          return false;
+        },
+        { timeout: 11000, polling: 250 }
+      )
+      .catch(() => {});
+
+    // Give star rating & review body a brief moment to settle after author button mounts
+    await new Promise((r) => setTimeout(r, 300));
+
+    const domEval = await page.evaluate(() => {
+      const bodyText = document.body ? document.body.innerText : "";
+      const unavail =
+        bodyText.includes("This review is no longer available") ||
+        bodyText.includes("review is unavailable");
+      const btn = document.querySelector("button.P9Vtnb, button.fontTitleSmall");
+      const starEl = document.querySelector('.kvMYJc, [role="img"][aria-label*="star"]');
+      const revEl = document.querySelector(".wiI7pd, .MyEned span");
+      const shopEl = document.querySelector(".daF0l, h1.DUwDvf");
+      const idEl = document.querySelector("[data-review-id]");
+      return {
+        unavail,
+        author: btn?.textContent?.trim() || undefined,
+        starAria: starEl?.getAttribute("aria-label") || undefined,
+        review: revEl?.textContent?.trim() || undefined,
+        shop: shopEl?.textContent?.trim() || undefined,
+        reviewId: idEl?.getAttribute("data-review-id") || undefined,
+      };
+    });
+
+    if (domEval?.unavail) {
+      return {
+        success: false,
+        isUnavailable: true,
+        shopName: decodeHtmlEntities(domEval.shop),
+        source: "cloudflare-mybrowser",
+        error: UNAVAILABLE_REVIEW_ERROR,
+      };
+    }
+
+    const html = await page.content();
+    if (isReviewUnavailableContent(html)) {
+      const parsed = extractReviewDataFromHtml(html);
+      return {
+        success: false,
+        isUnavailable: true,
+        shopName: parsed.shopName || decodeHtmlEntities(domEval?.shop),
+        source: "cloudflare-mybrowser",
+        error: UNAVAILABLE_REVIEW_ERROR,
+      };
+    }
+
+    const parsed = extractReviewDataFromHtml(html);
+    const evalStarMatch = domEval?.starAria?.match(/([1-5])/);
+    const starRating =
+      (evalStarMatch ? parseInt(evalStarMatch[1], 10) : undefined) || parsed.starRating;
+    const reviewerName = decodeHtmlEntities(domEval?.author) || parsed.reviewerName;
+    const reviewText = decodeHtmlEntities(domEval?.review) || parsed.reviewText;
+    const shopName = decodeHtmlEntities(domEval?.shop) || parsed.shopName;
+
+    if (reviewerName || shopName || reviewText || starRating) {
+      return {
+        success: Boolean(reviewerName || shopName || reviewText || starRating),
+        shopName,
+        reviewerName,
+        reviewText,
+        starRating,
+        reviewId: domEval?.reviewId || fallbackReviewId || undefined,
+        source: "cloudflare-mybrowser",
+      };
+    }
+  } catch (cfPuppeteerErr) {
+    console.warn("Cloudflare puppeteer execution warning:", cfPuppeteerErr);
+  } finally {
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Fetches OpenGraph metadata (shop name and exact filled-star count ★).
+ */
+async function fetchOpenGraphMetadata(
+  targetUrl: string
+): Promise<{ shopName?: string; starRating?: number }> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
+    const ogRes = await fetch(targetUrl, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      redirect: "follow",
+    });
+    clearTimeout(timer);
+
+    if (!ogRes.ok) return {};
+    const ogHtml = await ogRes.text();
+
+    const ogTitleMatch =
+      ogHtml.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
+      ogHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
+
+    const ogDescMatch =
+      ogHtml.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
+      ogHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
+
+    let shopName: string | undefined;
+    let starRating: number | undefined;
+
+    if (ogTitleMatch?.[1]) {
+      const cleanedTitle = decodeHtmlEntities(
+        ogTitleMatch[1].replace(/^Google review of\s*/i, "").trim()
+      );
+      if (cleanedTitle && cleanedTitle.toLowerCase() !== "google maps") {
+        shopName = cleanedTitle;
+      }
+    }
+
+    if (ogDescMatch?.[1]) {
+      const starCount = (ogDescMatch[1].match(/★/g) || []).length;
+      if (starCount >= 1 && starCount <= 5) {
+        starRating = starCount;
+      }
+    }
+
+    return { shopName, starRating };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Queries Jina Cloud Headless Reader waiting explicitly for Google Maps review JS hydration.
+ * Uses X-Return-Format: text first (works reliably on Jina without requiring a paid API key),
+ * falling back to Markdown mode (preserving ![Image: Photo of Author]) if needed.
+ */
+async function fetchJinaReviewSnapshot(
+  candidateUrl: string,
+  format: "text" | "markdown"
+): Promise<{
+  isUnavailable?: boolean;
+  reviewerName?: string;
+  reviewText?: string;
+  shopName?: string;
+}> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 18000);
+  try {
+    const headers: Record<string, string> = {
+      "User-Agent": CHROME_USER_AGENT,
+      "X-Wait-For-Selector": "button.P9Vtnb, button.fontTitleSmall, div.PbZDve",
+      "X-Timeout": "15",
+      "X-No-Cache": "true",
+    };
+    if (format === "text") {
+      headers["X-Return-Format"] = "text";
+    }
+
+    const res = await fetch(`https://r.jina.ai/${candidateUrl}`, {
+      signal: controller.signal,
+      headers,
+    });
+    if (!res.ok) return {};
+
+    const content = await res.text();
+    if (isReviewUnavailableContent(content)) {
+      const parsed = extractReviewDataFromText(content);
+      return { isUnavailable: true, shopName: parsed.shopName };
+    }
+
+    const parsed = extractReviewDataFromText(content);
+    return {
+      reviewerName: parsed.reviewerName,
+      reviewText: parsed.reviewText,
+      shopName: parsed.shopName,
+    };
+  } catch (err) {
+    console.warn(`Jina ${format} reader warning:`, err);
+    return {};
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Scrapes live Google Maps review DOM using headless Chromium (local dev),
+ * Cloudflare Browser Rendering (MYBROWSER), or Jina JS-rendered reader + OpenGraph stars.
+ */
+export async function scrapeGoogleMapsLiveReview(
+  reviewUrl: string
+): Promise<LiveReviewScrapeResult> {
+  // First resolve any shortlink (e.g. share.google / maps.app.goo.gl / goo.gl/maps)
+  const targetUrl = await resolveGoogleMapsUrl(reviewUrl);
+  const reviewId = extractGoogleReviewId(targetUrl);
+
+  let extractedShopName: string | undefined;
+  let extractedStars: number | undefined;
+  let extractedReviewerName: string | undefined;
+  let extractedReviewText: string | undefined;
+  let resolvedReviewId = reviewId || undefined;
+  let source = "none";
+
+  const chromePath = findChromePath();
+
+  // 1. Local dev headless Chrome via CDP
+  if (chromePath) {
+    const localResult = await scrapeWithLocalChrome(chromePath, targetUrl, reviewId);
+    if (localResult) {
+      if (localResult.isUnavailable) return localResult;
+      if (localResult.reviewerName && localResult.starRating) return localResult;
+      extractedShopName = localResult.shopName;
+      extractedStars = localResult.starRating;
+      extractedReviewerName = localResult.reviewerName;
+      extractedReviewText = localResult.reviewText;
+      resolvedReviewId = localResult.reviewId || resolvedReviewId;
+      source = localResult.source || "local-chrome";
+    }
+  } else {
+    // 2. Cloudflare Workers Browser Rendering (MYBROWSER)
+    const cfResult = await scrapeWithCloudflareBrowser(targetUrl, reviewId);
+    if (cfResult) {
+      if (cfResult.isUnavailable) return cfResult;
+      if (cfResult.reviewerName && cfResult.starRating) return cfResult;
+      extractedShopName = cfResult.shopName;
+      extractedStars = cfResult.starRating;
+      extractedReviewerName = cfResult.reviewerName;
+      extractedReviewText = cfResult.reviewText;
+      resolvedReviewId = cfResult.reviewId || resolvedReviewId;
+      source = cfResult.source || "cloudflare-mybrowser";
+    }
+  }
+
+  // 3. Serverless Fallback: Run OpenGraph (for exact stars & shopName) in parallel with
+  //    Jina Headless Reader waiting on button.P9Vtnb / div.PbZDve (for reviewerName & reviewText)
+  if (!extractedReviewerName || !extractedStars || !extractedReviewText || !extractedShopName) {
+    const cleanReviewUrl = stripTrackingParams(reviewUrl);
+    const readerCandidates =
+      cleanReviewUrl && cleanReviewUrl !== targetUrl
+        ? [cleanReviewUrl, targetUrl]
+        : [targetUrl];
+
+    const ogPromise =
+      !extractedStars || !extractedShopName
+        ? fetchOpenGraphMetadata(targetUrl)
+        : Promise.resolve<{ shopName?: string; starRating?: number }>({});
+
+    const jinaTask = async () => {
+      if (extractedReviewerName && extractedReviewText) return {};
+      for (const candidateUrl of readerCandidates) {
+        const textRes = await fetchJinaReviewSnapshot(candidateUrl, "text");
+        if (textRes.isUnavailable) return textRes;
+        if (textRes.reviewerName) return textRes;
+
+        const mdRes = await fetchJinaReviewSnapshot(candidateUrl, "markdown");
+        if (mdRes.isUnavailable) return mdRes;
+        if (mdRes.reviewerName) return mdRes;
+
+        if (textRes.shopName || textRes.reviewText) {
+          return {
+            shopName: textRes.shopName || mdRes.shopName,
+            reviewText: textRes.reviewText || mdRes.reviewText,
+          };
+        }
+      }
+      return {};
+    };
+
+    const [ogData, jinaData] = await Promise.all([ogPromise, jinaTask()]);
+
+    if (jinaData.isUnavailable) {
+      return {
+        success: false,
+        isUnavailable: true,
+        shopName: jinaData.shopName || ogData.shopName || extractedShopName,
+        reviewId: resolvedReviewId,
+        source: "jina-unavailable",
+        error: UNAVAILABLE_REVIEW_ERROR,
+      };
+    }
+
+    if (!extractedReviewerName && jinaData.reviewerName) {
+      extractedReviewerName = jinaData.reviewerName;
+      source = source === "none" ? "jina-text" : `${source}+jina`;
+    }
+    if (!extractedReviewText && jinaData.reviewText) {
+      extractedReviewText = jinaData.reviewText;
+    }
+    if (!extractedShopName && (jinaData.shopName || ogData.shopName)) {
+      extractedShopName = jinaData.shopName || ogData.shopName;
+    }
+    if (!extractedStars && ogData.starRating) {
+      extractedStars = ogData.starRating;
+    }
+  }
+
   return {
-    success: Boolean(extractedShopName || extractedReviewerName || extractedStars || reviewId),
+    success: Boolean(
+      extractedShopName || extractedReviewerName || extractedStars || resolvedReviewId
+    ),
     shopName: extractedShopName,
     reviewerName: extractedReviewerName,
     reviewText: extractedReviewText,
     starRating: extractedStars,
-    reviewId: reviewId || undefined,
+    reviewId: resolvedReviewId,
+    source,
   };
 }
 
@@ -513,7 +1101,7 @@ export function isReviewerNameMatch(expectedName: string, actualName: string): b
 export function extractShopNameFromUrl(url: string): string | null {
   if (!url) return null;
   const match = url.match(/\/place\/([^/@?]+)/);
-  if (match && match[1]) {
+  if (match?.[1]) {
     try {
       return decodeURIComponent(match[1].replace(/\+/g, " ")).trim();
     } catch {
@@ -564,8 +1152,7 @@ export function isShopNameMatch(
 
 /**
  * Strictly verifies that review text on Google Maps matches the assigned AI review text.
- * Requires exact match, legitimate Google Maps prefix truncation, or >= 75% keyword overlap.
- * Prevents users from writing arbitrary, unassigned reviews.
+ * Requires exact match, legitimate Google Maps prefix truncation, or >= 70% keyword overlap.
  */
 export function isReviewTextMatch(
   expectedText?: string,
@@ -603,13 +1190,17 @@ export function isReviewTextMatch(
   // 3. Strict Keyword Overlap (requires >= 70% of assigned significant words)
   const expWords = normExp.split(" ").filter((w) => w.length >= 2);
   if (expWords.length === 0) {
-    return { matches: normExp === normAct, reason: "Assigned text too short to verify.", score: normExp === normAct ? 1.0 : 0 };
+    return {
+      matches: normExp === normAct,
+      reason: "Assigned text too short to verify.",
+      score: normExp === normAct ? 1.0 : 0,
+    };
   }
 
   const matchCount = expWords.filter((w) => normAct.includes(w)).length;
   const overlapRatio = matchCount / expWords.length;
 
-  if (overlapRatio >= 0.70) {
+  if (overlapRatio >= 0.7) {
     return { matches: true, score: Number(overlapRatio.toFixed(2)) };
   }
 

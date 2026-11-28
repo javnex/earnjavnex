@@ -208,12 +208,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3.2 User Account Cooldown (10 minutes between submissions to avoid coordinated review ring flags)
+    // 3.2 User Account Cooldown (10 minutes between approved/pending submissions to avoid coordinated review ring flags)
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
     const { data: recentUserSub } = await supabase
       .from("Submission")
       .select("createdAt")
       .eq("userId", userId)
+      .neq("status", "REJECTED")
       .gte("createdAt", tenMinutesAgo.toISOString())
       .order("createdAt", { ascending: false })
       .limit(1)
@@ -262,19 +263,32 @@ export async function POST(req: Request) {
 
     // 5. Live Automated Google Maps Verification & Review ID Uniqueness
     const expectedReviewer =
-      reviewerName || (session.user as any)?.name || (session.user as any)?.email;
+      (session.user as any)?.name || reviewerName || (session.user as any)?.email;
     const requiredStars = assignedStars || 5;
 
     const liveScrape = await scrapeGoogleMapsLiveReview(trimmedProofLink);
     const canonicalReviewId = liveScrape.reviewId || validation.reviewId;
 
+    console.log("[Verification]", {
+      taskId,
+      source: liveScrape.source,
+      hasReviewer: Boolean(liveScrape.reviewerName),
+      hasShop: Boolean(liveScrape.shopName),
+      starRating: liveScrape.starRating,
+      hasText: Boolean(liveScrape.reviewText),
+      isUnavailable: Boolean(liveScrape.isUnavailable),
+      hasReviewId: Boolean(canonicalReviewId),
+    });
+
     // Check canonical review token uniqueness across all submissions (anti-theft: user A cannot submit user B's review)
     if (canonicalReviewId) {
+      const safeReviewId = canonicalReviewId.replace(/[%*,()]/g, "");
       const { data: duplicateReview } = await supabase
         .from("Submission")
         .select("id, status")
-        .or(`proofLink.ilike.%${canonicalReviewId}%,adminNotes.ilike.%${canonicalReviewId}%`)
+        .or(`proofLink.ilike.%${safeReviewId}%,adminNotes.ilike.%${safeReviewId}%`)
         .neq("status", "REJECTED")
+        .limit(1)
         .maybeSingle();
 
       if (duplicateReview) {
@@ -535,22 +549,45 @@ export async function POST(req: Request) {
 
     const verificationNote = `Auto-Verified (4/4 Passed): Reviewer="${verifiedAuthorName}", Shop="${liveScrape.shopName || targetTask.title}", Stars=${liveScrape.starRating || requiredStars}★${canonicalReviewId ? ` | [ReviewID: ${canonicalReviewId}]` : ""}${assignedReviewText ? ` | Assigned: "${assignedReviewText}"` : ""}`;
 
-    // Insert Submission via Supabase HTTPS (instant & port 443 firewall-immune)
-    const submissionId = `sub_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 9)}`;
-
-    const { data: insertedSub, error: insertErr } = await supabase
+    // Upsert/update if user had an earlier REJECTED row for this (userId, taskId) unique pair
+    const nowIso = new Date().toISOString();
+    const { data: existingRejected } = await supabase
       .from("Submission")
-      .insert({
-        id: submissionId,
-        userId,
-        taskId,
-        proofLink: trimmedProofLink,
-        status: "APPROVED",
-        rewardCredited: rewardAmount,
-        adminNotes: verificationNote,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })
+      .select("id")
+      .eq("userId", userId)
+      .eq("taskId", taskId)
+      .eq("status", "REJECTED")
+      .maybeSingle();
+
+    const submissionId =
+      existingRejected?.id ||
+      `sub_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 9)}`;
+
+    const submissionOp = existingRejected
+      ? supabase
+          .from("Submission")
+          .update({
+            proofLink: trimmedProofLink,
+            status: "APPROVED",
+            rewardCredited: rewardAmount,
+            adminNotes: verificationNote,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          })
+          .eq("id", existingRejected.id)
+      : supabase.from("Submission").insert({
+          id: submissionId,
+          userId,
+          taskId,
+          proofLink: trimmedProofLink,
+          status: "APPROVED",
+          rewardCredited: rewardAmount,
+          adminNotes: verificationNote,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+    const { data: insertedSub, error: insertErr } = await submissionOp
       .select()
       .single();
 

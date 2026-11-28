@@ -80,7 +80,8 @@ export async function GET(req: Request) {
             const { data: userSubs } = await supabase
               .from("Submission")
               .select("taskId")
-              .eq("userId", userId);
+              .eq("userId", userId)
+              .neq("status", "REJECTED");
             userSubs?.forEach((s: any) => userSubmittedTaskIds.push(s.taskId));
           }
           const filtered = await Promise.all(
@@ -149,7 +150,7 @@ export async function GET(req: Request) {
     const userSubmittedTaskIds: string[] = [];
     if (userId) {
       const userSubmissions = await prisma.submission.findMany({
-        where: { userId },
+        where: { userId, status: { not: "REJECTED" } },
         select: { taskId: true },
       });
       userSubmissions.forEach((s) => userSubmittedTaskIds.push(s.taskId));
