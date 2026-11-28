@@ -1,8 +1,17 @@
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { getEnv } from "@/lib/env";
 
 export function getNowpaymentsApiUrl(): string {
-  return (getEnv("NOWPAYMENTS_API_URL") || "https://api.nowpayments.io/v1").trim().replace(/^["']|["']$/g, "");
+  return (getEnv("NOWPAYMENTS_API_URL") || "https://api.nowpayments.io/v1")
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/^["']|["']$/g, "");
+}
+export function getNowpaymentsAuthProxyUrl(): string {
+  return (getEnv("NOWPAYMENTS_AUTH_PROXY_URL") || "")
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/^["']|["']$/g, "");
 }
 export function getNowpaymentsApiKey(): string {
   return (getEnv("NOWPAYMENTS_API_KEY") || "").trim().replace(/^["']|["']$/g, "");
@@ -20,8 +29,78 @@ export function getNowpaymentsIpnSecret(): string {
   return (getEnv("NOWPAYMENTS_IPN_SECRET") || "").trim().replace(/^["']|["']$/g, "");
 }
 
-// In-memory cache for auth JWT
+// In-memory cache + edge Cache API key (NOWPayments JWTs expire after ~300 seconds)
 let cachedToken: { token: string; expiresAt: number } | null = null;
+const JWT_SAFETY_BUFFER_MS = 30_000;
+
+function parseJwtExpirationMs(token: string, fallbackNow: number): number {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return fallbackNow + 270_000;
+    const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = Buffer.from(padded, "base64").toString("utf8");
+    const payload = JSON.parse(json) as { exp?: number };
+    if (typeof payload.exp === "number" && payload.exp > 0) {
+      return payload.exp * 1000;
+    }
+  } catch {
+    // Fallback to conservative 4.5-minute TTL
+  }
+  return fallbackNow + 270_000;
+}
+
+function getEdgeCacheKey(email: string): string {
+  const hash = crypto.createHash("sha256").update(email).digest("hex").slice(0, 16);
+  return `https://cache.earn.javnex.in/np-jwt-${hash}`;
+}
+
+async function readEdgeCachedToken(email: string, now: number): Promise<{ token: string; expiresAt: number } | null> {
+  try {
+    const cache = (globalThis as any).caches?.default;
+    if (!cache) return null;
+    const match = await cache.match(getEdgeCacheKey(email));
+    if (!match) return null;
+    const data = (await match.json()) as { token?: string; expiresAt?: number };
+    if (data?.token && typeof data.expiresAt === "number" && data.expiresAt > now + JWT_SAFETY_BUFFER_MS) {
+      return { token: data.token, expiresAt: data.expiresAt };
+    }
+  } catch {
+    // Cache API unavailable in Node dev
+  }
+  return null;
+}
+
+async function writeEdgeCachedToken(email: string, token: string, expiresAt: number): Promise<void> {
+  try {
+    const cache = (globalThis as any).caches?.default;
+    if (!cache) return;
+    const ttlSeconds = Math.max(30, Math.floor((expiresAt - Date.now()) / 1000));
+    await cache.put(
+      getEdgeCacheKey(email),
+      new Response(JSON.stringify({ token, expiresAt }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": `max-age=${ttlSeconds}`,
+        },
+      })
+    );
+  } catch {
+    // Cache API unavailable in Node dev
+  }
+}
+
+async function clearCachedToken(email?: string): Promise<void> {
+  cachedToken = null;
+  if (!email) return;
+  try {
+    const cache = (globalThis as any).caches?.default;
+    if (cache) {
+      await cache.delete(getEdgeCacheKey(email));
+    }
+  } catch {
+    // ignore
+  }
+}
 
 /**
  * Standard RFC 6238 TOTP generator for 2FA verification with NOWPayments
@@ -63,16 +142,27 @@ export function generateTOTP(base32Secret: string): string {
 /**
  * Get JWT Authentication Token from NOWPayments
  */
-export async function getNowpaymentsAuthToken(): Promise<string> {
+export async function getNowpaymentsAuthToken(forceRefresh = false): Promise<string> {
   const now = Date.now();
-  // Reuse valid cached token (NOWPayments JWTs are valid for several days)
-  if (cachedToken && cachedToken.expiresAt > now + 60000) {
-    return cachedToken.token;
-  }
-
   const email = getNowpaymentsEmail();
   const password = getNowpaymentsPassword();
   const apiUrl = getNowpaymentsApiUrl();
+  const authProxyUrl = getNowpaymentsAuthProxyUrl();
+
+  if (!forceRefresh) {
+    if (cachedToken && cachedToken.expiresAt > now + JWT_SAFETY_BUFFER_MS) {
+      return cachedToken.token;
+    }
+    if (email) {
+      const edgeEntry = await readEdgeCachedToken(email, now);
+      if (edgeEntry) {
+        cachedToken = edgeEntry;
+        return edgeEntry.token;
+      }
+    }
+  } else {
+    await clearCachedToken(email || undefined);
+  }
 
   if (!email || !password) {
     throw new Error(
@@ -80,14 +170,19 @@ export async function getNowpaymentsAuthToken(): Promise<string> {
     );
   }
 
-  const res = await fetch(`${apiUrl}/auth`, {
+  const authEndpoint = authProxyUrl || `${apiUrl}/auth`;
+  const proxySecret = getEnv("NOWPAYMENTS_PROXY_SECRET");
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  if (proxySecret && authProxyUrl) {
+    headers["x-proxy-secret"] = proxySecret;
+  }
+
+  const res = await fetch(authEndpoint, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-    },
+    headers,
     body: JSON.stringify({
       email,
       password,
@@ -95,28 +190,31 @@ export async function getNowpaymentsAuthToken(): Promise<string> {
   });
 
   if (!res.ok) {
+    const errText = await res.text().catch(() => "");
     if (res.status === 429) {
-      if (cachedToken?.token) {
-        console.warn("NOWPayments auth rate-limited (429), reusing active cached token.");
-        return cachedToken.token;
-      }
+      const retryAfter = res.headers.get("retry-after");
+      const detail = errText.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 140);
+      const waitHint = retryAfter ? ` Retry-After: ${retryAfter}s.` : "";
       throw new Error(
-        "NOWPayments temporary rate limit active (429: Too Many Requests). NOWPayments enforces a short 5-10 minute cooldown between login calls to prevent abuse. Please wait a few minutes before testing again."
+        `NOWPayments auth rate-limited (429 Too Many Requests).${waitHint} Cloudflare Worker shared egress IPs are throttled by api.nowpayments.io/v1/auth${detail ? ` [${detail}]` : ""}. Configure NOWPAYMENTS_AUTH_PROXY_URL or NOWPAYMENTS_API_URL via a static non-Cloudflare relay to avoid Worker IP throttling.`
       );
     }
-    const errText = await res.text();
-    throw new Error(`NOWPayments auth failed (${res.status}): ${errText}`);
+    throw new Error(`NOWPayments auth failed (${res.status}): ${errText.slice(0, 200)}`);
   }
 
-  const data = await res.json();
-  const token = data.token;
-  // Cache token for 24 hours to prevent hitting NOWPayments auth rate limit
-  cachedToken = {
-    token,
-    expiresAt: now + 24 * 60 * 60 * 1000,
-  };
+  const data = (await res.json()) as { token?: string };
+  if (!data?.token) {
+    throw new Error("NOWPayments auth response did not contain a JWT token.");
+  }
 
-  return token;
+  const expiresAt = parseJwtExpirationMs(data.token, now);
+  cachedToken = {
+    token: data.token,
+    expiresAt,
+  };
+  await writeEdgeCachedToken(email, data.token, expiresAt);
+
+  return data.token;
 }
 
 /**
@@ -150,8 +248,9 @@ export async function getNowpaymentsBalance(): Promise<{
       throw new Error(`Failed to fetch balance: ${res.statusText}`);
     }
 
-    const data = await res.json();
-    return { balances: data.balances || {}, raw: data };
+    const data = (await res.json()) as any;
+    const normalized = data?.balances || data || {};
+    return { balances: normalized, raw: data };
   } catch (err: any) {
     console.error("NOWPayments getBalance error:", err.message);
     return {
@@ -175,12 +274,12 @@ export async function getLiveUsdtInrRate(fallbackRate = 90.5): Promise<number> {
       }
     );
     if (res.ok) {
-      const data = await res.json();
+      const data = (await res.json()) as { tether?: { inr?: number } };
       if (data?.tether?.inr && typeof data.tether.inr === "number") {
         return Number(data.tether.inr.toFixed(2));
       }
     }
-  } catch (e) {
+  } catch {
     console.warn("CoinGecko rate fetch failed, using fallback:", fallbackRate);
   }
   return fallbackRate;
@@ -188,7 +287,7 @@ export async function getLiveUsdtInrRate(fallbackRate = 90.5): Promise<number> {
 
 /**
  * Create and execute Mass Payout via NOWPayments API
- * Includes automatic 2FA TOTP verification
+ * Includes automatic 2FA TOTP verification and 401 token refresh
  */
 export async function executeNowpaymentsPayout(params: {
   withdrawalId: string;
@@ -205,14 +304,12 @@ export async function executeNowpaymentsPayout(params: {
 }> {
   const { withdrawalId, walletAddress, usdtAmount, network = "BSC" } = params;
 
-  // Validation: EVM address format (BSC and Polygon both use 42-char 0x... format)
   if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
     throw new Error(
       "Invalid EVM wallet address. Must be a 42-character address starting with 0x."
     );
   }
 
-  // Ticker: usdtbsc (CoinDCX / BSC BEP-20) or usdtmatic (Polygon)
   const currencyTicker = network.toUpperCase() === "POLYGON" ? "usdtmatic" : "usdtbsc";
 
   const apiKey = getNowpaymentsApiKey();
@@ -221,30 +318,20 @@ export async function executeNowpaymentsPayout(params: {
   const apiUrl = getNowpaymentsApiUrl();
   const twoFaSecret = getNowpayments2faSecret();
 
-  // If live credentials are not set, run seamless sandbox / simulated payout
   if (!apiKey || !email || !password) {
     console.log(
       `[NOWPayments SIMULATION] Processing payout of ${usdtAmount} USDT to ${walletAddress}`
     );
-    const mockTxHash =
-      "0x" + crypto.randomBytes(32).toString("hex");
-    const mockBatchId = "batch_sim_" + Date.now();
-    const mockPayoutId = "payout_sim_" + Date.now();
-
     return {
       success: true,
-      batchId: mockBatchId,
-      payoutId: mockPayoutId,
-      txHash: mockTxHash,
+      batchId: "batch_sim_" + Date.now(),
+      payoutId: "payout_sim_" + Date.now(),
+      txHash: "0x" + crypto.randomBytes(32).toString("hex"),
       simulated: true,
     };
   }
 
   try {
-    // 1. Authenticate
-    const token = await getNowpaymentsAuthToken();
-
-    // 2. Create Payout
     const callbackUrl = `${
       getEnv("NEXTAUTH_URL") || "https://earn.javnex.in"
     }/api/webhooks/nowpayments`;
@@ -261,50 +348,58 @@ export async function executeNowpaymentsPayout(params: {
       ],
     };
 
-    const payoutRes = await fetch(`${apiUrl}/payout`, {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payoutPayload),
-    });
+    const submitPayout = async (authToken: string) =>
+      fetch(`${apiUrl}/payout`, {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payoutPayload),
+      });
+
+    let token = await getNowpaymentsAuthToken();
+    let payoutRes = await submitPayout(token);
+
+    // Refresh JWT once cleanly if cached token expired before server clock check
+    if (payoutRes.status === 401) {
+      await payoutRes.body?.cancel().catch(() => {});
+      token = await getNowpaymentsAuthToken(true);
+      payoutRes = await submitPayout(token);
+    }
 
     if (!payoutRes.ok) {
       const errText = await payoutRes.text();
-      throw new Error(`NOWPayments payout creation failed: ${errText}`);
+      throw new Error(`NOWPayments payout creation failed (${payoutRes.status}): ${errText}`);
     }
 
-    const payoutData = await payoutRes.json();
+    const payoutData = (await payoutRes.json()) as {
+      id?: string | number;
+      batch_withdrawal_id?: string | number;
+      withdrawals?: Array<{ id?: string | number; hash?: string }>;
+    };
     const batchId = payoutData.id || payoutData.batch_withdrawal_id;
     const item = payoutData.withdrawals?.[0];
     const payoutId = item?.id ? String(item.id) : undefined;
 
-    // 3. Automated 2FA TOTP Verification
     if (twoFaSecret && batchId) {
       const totpCode = generateTOTP(twoFaSecret);
 
-      const verifyRes = await fetch(
-        `${apiUrl}/payout/${batchId}/verify`,
-        {
-          method: "POST",
-          headers: {
-            "x-api-key": apiKey,
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            verification_code: totpCode,
-          }),
-        }
-      );
+      const verifyRes = await fetch(`${apiUrl}/payout/${batchId}/verify`, {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          verification_code: totpCode,
+        }),
+      });
 
       if (!verifyRes.ok) {
-        console.warn(
-          "2FA TOTP verification warning:",
-          await verifyRes.text()
-        );
+        console.warn("2FA TOTP verification warning:", await verifyRes.text());
       }
     }
 
@@ -339,10 +434,9 @@ export function verifyNowpaymentsIpnSignature(
       );
       return false;
     }
-    return true; // Local development convenience
+    return true;
   }
 
-  // Sort keys alphabetically
   const sortedKeys = Object.keys(payload).sort();
   const sortedObj: Record<string, any> = {};
   for (const k of sortedKeys) {
