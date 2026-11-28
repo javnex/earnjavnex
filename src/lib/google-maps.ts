@@ -119,6 +119,7 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
   reviewerName?: string;
   reviewText?: string;
   starRating?: number;
+  reviewId?: string;
   isStructuralOnly?: boolean;
   error?: string;
 }> {
@@ -174,16 +175,20 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
         }
       }
 
+      const reviewId = extractGoogleReviewId(targetUrl);
+
       return {
         success: true,
         isStructuralOnly: true,
         shopName: extractedShopName,
         starRating: extractedStars,
+        reviewId: reviewId || undefined,
       };
     } catch {
       return {
         success: true,
         isStructuralOnly: true,
+        reviewId: extractGoogleReviewId(targetUrl) || undefined,
       };
     }
   }
@@ -195,6 +200,17 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
       timeout: 18000,
     });
 
+    if (
+      stdout.includes("This review is no longer available") ||
+      stdout.includes("review is unavailable") ||
+      stdout.includes("Review not found")
+    ) {
+      return {
+        success: false,
+        error: "This review is no longer available or was deleted on Google Maps.",
+      };
+    }
+
     // 1. Extract Shop Name: <div class="daF0l">...</div> or <h1 class="...DUwDvf...">...</h1>
     let shopMatch = stdout.match(/<div class="daF0l">([^<]+)<\/div>/);
     if (!shopMatch) {
@@ -202,10 +218,13 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
     }
     const shopName = shopMatch ? shopMatch[1].trim() : undefined;
 
-    // 2. Extract Reviewer Name: <button class="...P9Vtnb...|fontTitleSmall">...</button> or alt="Photo of ..."
-    let reviewerMatch = stdout.match(
-      /<button class="[^"]*(?:P9Vtnb|fontTitleSmall)[^"]*"[^>]*>([^<]+)<\/button>/
-    );
+    // 2. Extract Reviewer Name: aria-label="Actions for X's review" or <button class="...P9Vtnb...|fontTitleSmall"> or alt="Photo of ..."
+    let reviewerMatch = stdout.match(/aria-label="Actions for ([^']+)'s review"/i);
+    if (!reviewerMatch) {
+      reviewerMatch = stdout.match(
+        /<button class="[^"]*(?:P9Vtnb|fontTitleSmall)[^"]*"[^>]*>([^<]+)<\/button>/
+      );
+    }
     if (!reviewerMatch) {
       reviewerMatch = stdout.match(/alt="Photo of ([^"]+)"/);
     }
@@ -214,14 +233,18 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
     }
     const reviewerName = reviewerMatch ? reviewerMatch[1].trim() : undefined;
 
-    // 3. Extract Review Text: <span class="wiI7pd">...</span> or <div class="MyEned"...><span...>...</span>
+    // 3. Extract Canonical Review ID
+    const reviewIdMatch = stdout.match(/data-review-id="([^"]+)"/);
+    const reviewId = reviewIdMatch ? reviewIdMatch[1] : extractGoogleReviewId(targetUrl);
+
+    // 4. Extract Review Text: <span class="wiI7pd">...</span> or <div class="MyEned"...><span...>...</span>
     let textMatch = stdout.match(/<span class="wiI7pd">([^<]+)<\/span>/);
     if (!textMatch) {
       textMatch = stdout.match(/class="MyEned"[^>]*><span[^>]*>([^<]+)<\/span>/);
     }
     const reviewText = textMatch ? textMatch[1].trim() : undefined;
 
-    // 4. Extract Star Rating: <span class="kvMYJc" role="img" aria-label="X stars">
+    // 5. Extract Star Rating: <span class="kvMYJc" role="img" aria-label="X stars">
     let starRating: number | undefined = undefined;
     const starMatch =
       stdout.match(/<span class="kvMYJc"[^>]*aria-label="([1-5])\s*stars?"/i) ||
@@ -238,6 +261,7 @@ export async function scrapeGoogleMapsLiveReview(reviewUrl: string): Promise<{
       reviewerName,
       reviewText,
       starRating,
+      reviewId: reviewId || undefined,
     };
   } catch (err: any) {
     // If headless launch fails, fallback to structural check

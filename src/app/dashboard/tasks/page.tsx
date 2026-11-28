@@ -41,6 +41,33 @@ interface Task {
   assignedReview?: string;
 }
 
+interface CheckState {
+  id: "shop" | "account" | "stars" | "text";
+  label: string;
+  description: string;
+  status: "pending" | "running" | "passed" | "failed";
+  details?: string;
+}
+
+interface VerificationModalState {
+  isOpen: boolean;
+  taskId: string;
+  taskTitle: string;
+  rewardInr: number;
+  shopUrl: string;
+  assignedStars: number;
+  assignedReviewText: string;
+  expectedReviewer: string;
+  proofLink: string;
+  isVerifying: boolean;
+  isComplete: boolean;
+  isApproved: boolean;
+  error?: string;
+  failingStep?: "shop" | "account" | "stars" | "text" | "duplicate";
+  newBalance?: number;
+  checks: CheckState[];
+}
+
 export default function TasksPage() {
   const { data: session, update } = useSession();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -53,14 +80,7 @@ export default function TasksPage() {
     text: string;
   } | null>(null);
 
-  const [errorModal, setErrorModal] = useState<{
-    isOpen: boolean;
-    errorText: string;
-    taskTitle: string;
-    assignedStars?: number;
-    assignedReviewText?: string;
-    shopUrl?: string;
-  } | null>(null);
+  const [verificationModal, setVerificationModal] = useState<VerificationModalState | null>(null);
 
   const reviewerName =
     (session?.user as any)?.name ||
@@ -113,64 +133,212 @@ export default function TasksPage() {
       return;
     }
 
-    try {
-      setSubmittingTaskId(taskId);
-      setMessage(null);
+    const currentTask = tasks.find((t) => t.id === taskId);
+    const requiredStars = assignedStars || currentTask?.assignedStars || 5;
+    const taskTitle = currentTask?.title || "Store Listing";
+    const shopUrl = currentTask?.shopUrl || "";
+    const taskReward = currentTask?.rewardInr || 20;
+    const reviewText = assignedReviewText || currentTask?.assignedReview || "";
 
+    // Initialize 4-Check Verification State
+    const initialChecks: CheckState[] = [
+      {
+        id: "shop",
+        label: "Store Listing & CID Match",
+        description: `Verifying review belongs to "${taskTitle}"`,
+        status: "running",
+      },
+      {
+        id: "account",
+        label: "Google Account Identity Match",
+        description: `Verifying review author matches logged-in account "${reviewerName}"`,
+        status: "pending",
+      },
+      {
+        id: "stars",
+        label: "Star Rating Compliance",
+        description: `Verifying review was given exactly ${requiredStars} Stars`,
+        status: "pending",
+      },
+      {
+        id: "text",
+        label: "Review Text Compliance",
+        description: "Verifying published review matches assigned text",
+        status: "pending",
+      },
+    ];
+
+    setVerificationModal({
+      isOpen: true,
+      taskId,
+      taskTitle,
+      rewardInr: taskReward,
+      shopUrl,
+      assignedStars: requiredStars,
+      assignedReviewText: reviewText,
+      expectedReviewer: reviewerName,
+      proofLink,
+      isVerifying: true,
+      isComplete: false,
+      isApproved: false,
+      checks: initialChecks,
+    });
+
+    setSubmittingTaskId(taskId);
+    setMessage(null);
+
+    try {
       const res = await fetch("/api/submissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           taskId,
           proofLink,
-          assignedReviewText,
+          assignedReviewText: reviewText,
           reviewerName,
-          assignedStars,
+          assignedStars: requiredStars,
         }),
       });
 
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || "Submission failed");
-      }
+      if (res.ok && data.approved) {
+        // Success: all 4 checks passed!
+        const passedChecks: CheckState[] = [
+          {
+            id: "shop",
+            label: "Store Listing & CID Match",
+            description: data.checks?.shopMatch?.details || `Store verified (${taskTitle})`,
+            status: "passed",
+          },
+          {
+            id: "account",
+            label: "Google Account Identity Match",
+            description: data.checks?.accountMatch?.details || `Account verified (${reviewerName})`,
+            status: "passed",
+          },
+          {
+            id: "stars",
+            label: "Star Rating Compliance",
+            description: data.checks?.starsMatch?.details || `${requiredStars} Stars verified`,
+            status: "passed",
+          },
+          {
+            id: "text",
+            label: "Review Text Compliance",
+            description: data.checks?.textMatch?.details || "Assigned text confirmed",
+            status: "passed",
+          },
+        ];
 
-      const currentTask = tasks.find((t) => t.id === taskId);
-      const earnedReward = currentTask?.rewardInr || 20;
+        setVerificationModal((prev) =>
+          prev
+            ? {
+                ...prev,
+                isVerifying: false,
+                isComplete: true,
+                isApproved: true,
+                newBalance: data.newBalance,
+                checks: passedChecks,
+              }
+            : null
+        );
 
-      setMessage({
-        type: "success",
-        text: data.message || `Task submitted successfully! ₹${earnedReward} credited to your wallet.`,
-      });
+        // Clear proof input and remove completed task
+        setProofInputs((prev) => ({ ...prev, [taskId]: "" }));
+        setTasks((prev) => prev.filter((t) => t.id !== taskId));
 
-      // Clear input
-      setProofInputs((prev) => ({ ...prev, [taskId]: "" }));
+        // Update NextAuth session wallet balance
+        if (data.newBalance !== undefined) {
+          update({ walletBalance: data.newBalance });
+        }
+      } else {
+        // Failure: determine failing step and reflect in checks checklist
+        const errorMsg = data.error || "Verification failed";
+        const failingStep = data.failingStep || "shop";
 
-      // Immediately remove task from user's available list
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+        const evaluatedChecks: CheckState[] = [
+          {
+            id: "shop",
+            label: "Store Listing & CID Match",
+            description:
+              failingStep === "shop"
+                ? data.checks?.shopMatch?.details || errorMsg
+                : `Store verified (${taskTitle})`,
+            status: failingStep === "shop" ? "failed" : "passed",
+          },
+          {
+            id: "account",
+            label: "Google Account Identity Match",
+            description:
+              failingStep === "account" || failingStep === "duplicate"
+                ? data.checks?.accountMatch?.details || errorMsg
+                : failingStep === "shop"
+                ? `Pending store verification`
+                : `Account verified (${reviewerName})`,
+            status:
+              failingStep === "account" || failingStep === "duplicate"
+                ? "failed"
+                : failingStep === "shop"
+                ? "pending"
+                : "passed",
+          },
+          {
+            id: "stars",
+            label: "Star Rating Compliance",
+            description:
+              failingStep === "stars"
+                ? data.checks?.starsMatch?.details || errorMsg
+                : failingStep === "shop" || failingStep === "account" || failingStep === "duplicate"
+                ? `Required: ${requiredStars} Stars`
+                : `${requiredStars} Stars verified`,
+            status:
+              failingStep === "stars"
+                ? "failed"
+                : failingStep === "text"
+                ? "passed"
+                : "pending",
+          },
+          {
+            id: "text",
+            label: "Review Text Compliance",
+            description:
+              failingStep === "text"
+                ? data.checks?.textMatch?.details || errorMsg
+                : "Required assigned task text",
+            status: failingStep === "text" ? "failed" : "pending",
+          },
+        ];
 
-      // Update NextAuth session wallet balance if auto-credited
-      if (data.newBalance !== undefined) {
-        update({ walletBalance: data.newBalance });
+        setVerificationModal((prev) =>
+          prev
+            ? {
+                ...prev,
+                isVerifying: false,
+                isComplete: true,
+                isApproved: false,
+                error: errorMsg,
+                failingStep,
+                checks: evaluatedChecks,
+              }
+            : null
+        );
       }
     } catch (err: any) {
-      const errorMsg = err.message || "Submission failed";
-      setMessage({
-        type: "error",
-        text: errorMsg,
-      });
-      const currentTask = tasks.find((t) => t.id === taskId);
-      setErrorModal((prev) =>
-        prev?.isOpen
-          ? prev
-          : {
-              isOpen: true,
-              errorText: errorMsg,
-              taskTitle: currentTask?.title || "Task",
-              assignedStars: assignedStars || currentTask?.assignedStars,
-              assignedReviewText: assignedReviewText || currentTask?.assignedReview,
-              shopUrl: currentTask?.shopUrl,
+      const errorMsg = err.message || "Failed to reach verification terminal";
+      setVerificationModal((prev) =>
+        prev
+          ? {
+              ...prev,
+              isVerifying: false,
+              isComplete: true,
+              isApproved: false,
+              error: errorMsg,
+              checks: prev.checks.map((c, i) =>
+                i === 0 ? { ...c, status: "failed", description: errorMsg } : c
+              ),
             }
+          : null
       );
     } finally {
       setSubmittingTaskId(null);
@@ -601,140 +769,259 @@ export default function TasksPage() {
         </div>
       )}
 
-      {/* Verification Failure Popup Modal Dialog */}
-      {errorModal && errorModal.isOpen && (
+      {/* Live 4-Point Automated Verification Modal Dialog */}
+      {verificationModal && verificationModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
           <div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl space-y-5 text-slate-900 max-h-[92vh] overflow-y-auto">
             {/* Close X Button */}
-            <button
-              type="button"
-              onClick={() => setErrorModal(null)}
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            {!verificationModal.isVerifying && (
+              <button
+                type="button"
+                onClick={() => setVerificationModal(null)}
+                className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            )}
 
-            {/* Header */}
+            {/* Modal Header */}
             <div className="flex items-center gap-3 pr-8">
-              <div className="h-12 w-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0">
-                <AlertTriangle className="h-6 w-6 text-rose-600" />
+              <div
+                className={`h-12 w-12 rounded-2xl border flex items-center justify-center shrink-0 ${
+                  verificationModal.isVerifying
+                    ? "bg-blue-50 border-blue-200 text-blue-600 animate-pulse"
+                    : verificationModal.isApproved
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-600"
+                    : "bg-rose-50 border-rose-200 text-rose-600"
+                }`}
+              >
+                {verificationModal.isVerifying ? (
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                ) : verificationModal.isApproved ? (
+                  <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+                ) : (
+                  <AlertTriangle className="h-6 w-6 text-rose-600" />
+                )}
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Task Verification Failed</h3>
+                <h3 className="text-lg font-black text-slate-900">
+                  {verificationModal.isVerifying
+                    ? "Automated Review Verification"
+                    : verificationModal.isApproved
+                    ? "🎉 Verification Passed!"
+                    : "Task Verification Failed"}
+                </h3>
                 <p className="text-xs text-slate-500">
-                  Automated anti-cheat rejected this submission
+                  {verificationModal.isVerifying
+                    ? "Verifying live review across 4 quality criteria in real-time"
+                    : verificationModal.isApproved
+                    ? `All 4 checks passed! ₹${verificationModal.rewardInr} credited to your wallet`
+                    : "Submission rejected by automated anti-cheat standard"}
                 </p>
               </div>
             </div>
 
-            {/* Rejection Reason Card */}
-            <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4 space-y-1.5">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-rose-800">
-                Rejection Reason:
-              </span>
-              <p className="text-xs font-semibold text-rose-900 leading-relaxed font-sans">
-                {errorModal.errorText.toLowerCase().includes("unauthorized")
-                  ? "You are not signed in. You must be logged in with Google to submit tasks and receive wallet credits."
-                  : errorModal.errorText}
-              </p>
+            {/* 4-POINT LIVE CHECKLIST */}
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5">
+              <div className="flex items-center justify-between pb-1 border-b border-slate-200 text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                <span>Verification Criteria</span>
+                <span>Status</span>
+              </div>
+
+              {verificationModal.checks.map((check, idx) => {
+                const isPassed = check.status === "passed";
+                const isFailed = check.status === "failed";
+                const isRunning = check.status === "running";
+
+                return (
+                  <div
+                    key={check.id}
+                    className={`flex items-start justify-between gap-3 p-2.5 rounded-xl border transition-all ${
+                      isPassed
+                        ? "bg-emerald-50/70 border-emerald-200/90 text-emerald-950"
+                        : isFailed
+                        ? "bg-rose-50/80 border-rose-200 text-rose-950"
+                        : isRunning
+                        ? "bg-blue-50/80 border-blue-200 text-blue-950 shadow-xs"
+                        : "bg-white/60 border-slate-200/70 text-slate-600"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      {isPassed ? (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white font-bold shrink-0 mt-0.5">
+                          <Check className="h-3.5 w-3.5 stroke-[3]" />
+                        </div>
+                      ) : isFailed ? (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-600 text-white font-bold shrink-0 mt-0.5">
+                          <X className="h-3.5 w-3.5 stroke-[3]" />
+                        </div>
+                      ) : isRunning ? (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white shrink-0 mt-0.5">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        </div>
+                      ) : (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-slate-600 text-[10px] font-mono font-bold shrink-0 mt-0.5">
+                          {idx + 1}
+                        </div>
+                      )}
+
+                      <div className="space-y-0.5">
+                        <h4 className="text-xs font-bold leading-tight">{check.label}</h4>
+                        <p className="text-[11px] opacity-80 leading-snug">{check.description}</p>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 self-center">
+                      {isPassed ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
+                          Passed ✓
+                        </span>
+                      ) : isFailed ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800 border border-rose-200">
+                          Failed ❌
+                        </span>
+                      ) : isRunning ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800 border border-blue-200 animate-pulse">
+                          Checking...
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500 border border-slate-200">
+                          Pending
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* If Unauthorized, offer 1-click Sign In */}
-            {errorModal.errorText.toLowerCase().includes("unauthorized") ? (
-              <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-4 space-y-3">
-                <div className="flex items-center gap-2 text-blue-900 font-bold text-xs font-mono uppercase">
-                  <UserCheck className="h-4 w-4 text-blue-600" />
-                  <span>Sign In with Google to Claim Reward</span>
+            {/* VERIFICATION APPROVED STATE */}
+            {verificationModal.isApproved && (
+              <div className="rounded-xl border border-emerald-300 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-black text-emerald-900">
+                      Reward Credited: +₹{verificationModal.rewardInr} INR
+                    </h4>
+                    <p className="text-xs text-emerald-700">
+                      Funds deposited directly to your web wallet balance.
+                    </p>
+                  </div>
+                  {verificationModal.newBalance !== undefined && (
+                    <span className="rounded-xl border border-emerald-300 bg-white px-3 py-1.5 text-xs font-black text-emerald-800 shadow-xs tabular-nums">
+                      Balance: ₹{verificationModal.newBalance}
+                    </span>
+                  )}
                 </div>
-                <p className="text-xs text-slate-700 leading-relaxed font-sans">
-                  Your proof link was received, but we need your Google account login so we know which wallet to deposit your reward into!
-                </p>
                 <button
                   type="button"
-                  onClick={() => signIn("google", { callbackUrl: window.location.href })}
-                  className="w-full btn-futuristic py-3 rounded-xl text-xs font-bold text-white shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                  onClick={() => setVerificationModal(null)}
+                  className="w-full btn-green-accent py-3 rounded-xl text-xs font-bold text-white shadow-md flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Zap className="h-3.5 w-3.5 fill-white" />
-                  <span>Sign In with Google Now</span>
+                  <span>Done & Continue Earning</span>
                   <ArrowRight className="h-3.5 w-3.5" />
                 </button>
               </div>
-            ) : (
-              /* Step-by-Step Fix Instructions */
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 text-xs">
-                <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px] font-mono block">
-                  How to Fix & Re-Submit
-                </span>
+            )}
 
-                {/* Star rating reminder if present */}
-                {errorModal.assignedStars && (
+            {/* VERIFICATION FAILED STATE */}
+            {verificationModal.isComplete && !verificationModal.isApproved && (
+              <div className="space-y-4">
+                {/* Rejection Alert */}
+                <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-4 space-y-1.5">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-rose-800 block">
+                    Rejection Explanation:
+                  </span>
+                  <p className="text-xs font-semibold text-rose-900 leading-relaxed font-sans">
+                    {verificationModal.error}
+                  </p>
+                </div>
+
+                {/* Step-by-Step Fix Instructions */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 text-xs">
+                  <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px] font-mono block">
+                    How to Fix & Re-Verify
+                  </span>
+
+                  {/* Required Stars */}
                   <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900">
-                    <span className="font-medium text-xs font-mono">Required Star Rating:</span>
+                    <span className="font-medium text-xs font-mono">Assigned Rating Required:</span>
                     <span className="font-bold font-mono bg-white px-2 py-0.5 rounded text-amber-900 flex items-center gap-1 text-xs border border-amber-200 shadow-xs">
                       <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                      {errorModal.assignedStars} Stars Required
+                      {verificationModal.assignedStars} Stars Exactly
                     </span>
                   </div>
-                )}
 
-                {/* Assigned review text preview with 1-click copy */}
-                {errorModal.assignedReviewText && (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-slate-600">
-                      <span className="text-[11px] font-medium font-mono">Your Assigned Text:</span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyReview("modal", errorModal.assignedReviewText!)}
-                        className="text-blue-600 hover:underline flex items-center gap-1 text-[11px] font-bold cursor-pointer"
-                      >
-                        {copiedTaskId === "modal" ? (
-                          <>
-                            <Check className="h-3 w-3 text-emerald-600" />
-                            <span className="text-emerald-700">Copied!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3 w-3" />
-                            <span>Copy Text</span>
-                          </>
-                        )}
-                      </button>
+                  {/* Assigned text preview with copy */}
+                  {verificationModal.assignedReviewText && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-slate-600">
+                        <span className="text-[11px] font-medium font-mono">Your Assigned Text:</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCopyReview("modal", verificationModal.assignedReviewText)
+                          }
+                          className="text-blue-600 hover:underline flex items-center gap-1 text-[11px] font-bold cursor-pointer"
+                        >
+                          {copiedTaskId === "modal" ? (
+                            <>
+                              <Check className="h-3 w-3 text-emerald-600" />
+                              <span className="text-emerald-700">Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3" />
+                              <span>Copy Text</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <p className="p-3 rounded-lg bg-white border border-slate-200 text-slate-800 font-sans text-xs italic leading-relaxed shadow-xs">
+                        &ldquo;{verificationModal.assignedReviewText}&rdquo;
+                      </p>
                     </div>
-                    <p className="p-3 rounded-lg bg-white border border-slate-200 text-slate-800 font-sans text-xs italic leading-relaxed shadow-xs">
-                      &ldquo;{errorModal.assignedReviewText}&rdquo;
+                  )}
+
+                  <div className="text-[11px] text-slate-600 space-y-1 pt-2 border-t border-slate-200">
+                    <p>
+                      1. Open the store listing on Google Maps using your own account (
+                      <strong>{verificationModal.expectedReviewer}</strong>).
+                    </p>
+                    <p>
+                      2. Give exactly <strong>{verificationModal.assignedStars} Stars</strong> and paste
+                      the assigned text.
+                    </p>
+                    <p>
+                      3. Tap <strong>Post</strong>, then copy your public share link and click{" "}
+                      <strong>Verify & Earn</strong> again.
                     </p>
                   </div>
-                )}
+                </div>
 
-                <div className="text-[11px] text-slate-600 space-y-1 pt-2 border-t border-slate-200">
-                  <p>1. Open the store listing on your maps app, tap on your submission and click <strong>Edit</strong>.</p>
-                  <p>2. Give exactly <strong>{errorModal.assignedStars || 5} Stars</strong> and paste the assigned text.</p>
-                  <p>3. Wait 30 seconds for the public listing to refresh, then click <strong>Verify & Earn</strong> again.</p>
+                {/* Modal Actions */}
+                <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                  {verificationModal.shopUrl && (
+                    <a
+                      href={verificationModal.shopUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full sm:w-1/2 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors"
+                    >
+                      <span>Open Store Listing</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setVerificationModal(null)}
+                    className="btn-futuristic w-full sm:flex-1 py-2.5 rounded-xl text-xs font-bold text-white cursor-pointer shadow-md shadow-blue-500/20"
+                  >
+                    I Understand, Close & Fix
+                  </button>
                 </div>
               </div>
             )}
-
-            {/* Modal Actions */}
-            <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
-              {errorModal.shopUrl && (
-                <a
-                  href={errorModal.shopUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full sm:w-1/2 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors"
-                >
-                  <span>Open Store Listing</span>
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              )}
-              <button
-                type="button"
-                onClick={() => setErrorModal(null)}
-                className="btn-futuristic w-full sm:flex-1 py-2.5 rounded-xl text-xs font-bold text-white cursor-pointer shadow-md shadow-blue-500/20"
-              >
-                I Understand, Close & Fix
-              </button>
-            </div>
           </div>
         </div>
       )}
