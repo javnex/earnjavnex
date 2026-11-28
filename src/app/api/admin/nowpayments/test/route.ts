@@ -60,7 +60,7 @@ export async function POST() {
         checks.auth = true;
       }
     } catch (authErr: any) {
-      checks.error = `Authentication failed: ${authErr.message}`;
+      checks.error = authErr.message;
     }
 
     // 2. Test Balance & API Key

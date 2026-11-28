@@ -65,6 +65,7 @@ export function generateTOTP(base32Secret: string): string {
  */
 export async function getNowpaymentsAuthToken(): Promise<string> {
   const now = Date.now();
+  // Reuse valid cached token (NOWPayments JWTs are valid for several days)
   if (cachedToken && cachedToken.expiresAt > now + 60000) {
     return cachedToken.token;
   }
@@ -89,15 +90,25 @@ export async function getNowpaymentsAuthToken(): Promise<string> {
   });
 
   if (!res.ok) {
+    if (res.status === 429) {
+      if (cachedToken?.token) {
+        console.warn("NOWPayments auth rate-limited (429), reusing active cached token.");
+        return cachedToken.token;
+      }
+      throw new Error(
+        "NOWPayments temporary rate limit active (429: Too Many Requests). NOWPayments enforces a short 5-10 minute cooldown between login calls to prevent abuse. Please wait a few minutes before testing again."
+      );
+    }
     const errText = await res.text();
     throw new Error(`NOWPayments auth failed (${res.status}): ${errText}`);
   }
 
   const data = await res.json();
   const token = data.token;
+  // Cache token for 24 hours to prevent hitting NOWPayments auth rate limit
   cachedToken = {
     token,
-    expiresAt: now + 5 * 60 * 1000, // 5 min cache
+    expiresAt: now + 24 * 60 * 60 * 1000,
   };
 
   return token;
